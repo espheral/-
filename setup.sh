@@ -61,7 +61,6 @@ install_languages() {
     pkg install -y \
         python \
         python-pip \
-        nodejs \
         nodejs-lts \
         rust \
         golang \
