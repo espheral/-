@@ -2,13 +2,43 @@
 
 Configura un entorno de programación completo en tu móvil Android usando [Termux](https://termux.dev).
 
+## Instalar Termux
+
+### Opción A — GitHub (última versión, recomendado para Pixel)
+
+Los Pixel usan arquitectura **arm64-v8a**. Descarga el APK directamente desde las releases oficiales:
+
+1. En tu Pixel, abre este enlace en el navegador:
+   `https://github.com/termux/termux-app/releases/latest`
+2. Descarga `termux-app_vX.X.X+github-debug_arm64-v8a.apk`
+3. Abre el APK descargado — Android te pedirá habilitar instalación desde fuentes desconocidas
+4. Activa el permiso y confirma la instalación
+
+O con el script incluido en este repo (desde un PC/Mac con ADB):
+
+```bash
+bash install-termux.sh
+```
+
+> **Nota:** Las builds de GitHub están firmadas por el equipo de Termux pero son builds de desarrollo (`github-debug`). Son estables y actualizadas.
+
+### Opción B — F-Droid
+
+Instala F-Droid primero desde [f-droid.org](https://f-droid.org) y busca **Termux** dentro de la app.
+
+### Opción C — Google Play (no recomendado)
+
+La versión de Play Store no se actualiza desde 2020 y tiene bugs conocidos.
+
+---
+
+> **Importante:** Usa siempre la **misma fuente** para Termux y sus complementos (ej. Termux:API). Mezclar GitHub con Play Store causa errores de firma.
+
 ## Requisitos previos
 
-1. Instala **Termux** desde [F-Droid](https://f-droid.org/packages/com.termux/) (recomendado) o Google Play.
-2. Instala **Termux:API** desde el mismo origen que Termux.
-3. Android 7+ con al menos 2 GB de RAM libre.
-
-> **Importante:** Usa siempre la misma fuente (F-Droid o Play Store) para Termux y sus complementos. Mezclarlos causa errores.
+- Android 7+ (Pixel 2 o superior funciona perfectamente)
+- Al menos 1 GB de almacenamiento libre
+- Termux y Termux:API de la misma fuente
 
 ## Instalación rápida
 
