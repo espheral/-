@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Instalar Termux en Pixel</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 28px 24px;
+      max-width: 420px;
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      margin-bottom: 6px;
+      color: #58a6ff;
+    }
+
+    .version {
+      font-size: 0.8rem;
+      color: #8b949e;
+      margin-bottom: 24px;
+    }
+
+    .step {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      background: #1f6feb;
+      color: white;
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      min-width: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: bold;
+    }
+
+    .step-text {
+      font-size: 0.95rem;
+      line-height: 1.5;
+      color: #c9d1d9;
+      padding-top: 2px;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      margin-top: 8px;
+    }
+
+    .btn-primary {
+      background: #238636;
+      color: white;
+    }
+
+    .btn-secondary {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      margin-top: 10px;
+    }
+
+    .arch-detected {
+      background: #0d2818;
+      border: 1px solid #238636;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 0.82rem;
+      color: #3fb950;
+      margin-bottom: 20px;
+      font-family: monospace;
+    }
+
+    .warning {
+      background: #2d2209;
+      border: 1px solid #9e6a03;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 0.82rem;
+      color: #d29922;
+      margin-top: 20px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #30363d;
+      margin: 24px 0;
+    }
+
+    h2 {
+      font-size: 1rem;
+      color: #8b949e;
+      margin-bottom: 12px;
+    }
+
+    code {
+      font-family: monospace;
+      background: #0d1117;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      color: #79c0ff;
+    }
+
+    footer {
+      margin-top: 24px;
+      font-size: 0.75rem;
+      color: #484f58;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h1>📱 Instalar Termux en Pixel</h1>
+  <div class="version" id="versionLabel">Cargando versión más reciente…</div>
+
+  <div class="arch-detected" id="archInfo">
+    Detectando arquitectura del dispositivo…
+  </div>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-text">Pulsa el botón de descarga. Chrome descargará el APK a tu carpeta <code>Descargas</code>.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-text">Abre el APK desde la notificación o desde <code>Descargas</code>.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-text">Android pedirá permiso para instalar apps de fuentes desconocidas — acéptalo para Chrome.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-text">Pulsa <strong>Instalar</strong> y abre Termux.</div>
+  </div>
+
+  <a id="downloadBtn" class="btn btn-primary" href="#" download>
+    ⬇ Descargar Termux (detección en curso…)
+  </a>
+
+  <hr class="divider">
+  <h2>Después de instalar Termux</h2>
+
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-text">En Termux, pega y ejecuta:</div>
+  </div>
+
+  <div style="background:#0d1117;border-radius:6px;padding:12px;font-family:monospace;font-size:0.78rem;color:#79c0ff;line-height:1.7;overflow-x:auto;">
+    pkg install -y git<br>
+    git clone https://github.com/espheral/- ~/setup<br>
+    cd ~/setup &amp;&amp; bash setup.sh
+  </div>
+
+  <a class="btn btn-secondary"
+     href="https://github.com/termux/termux-app/releases/latest"
+     target="_blank">
+    Ver todas las releases en GitHub
+  </a>
+
+  <div class="warning" id="warningBox" style="display:none">
+    ⚠ No se pudo detectar la arquitectura automáticamente. Si tu Pixel es de 2016 o posterior, usa <strong>arm64-v8a</strong>.
+  </div>
+</div>
+
+<footer>
+  Termux es software libre — <a href="https://github.com/termux/termux-app" style="color:#58a6ff">github.com/termux/termux-app</a>
+</footer>
+
+<script>
+  // Versión conocida — se actualiza dinámicamente si la API responde
+  const KNOWN_VERSION = "v0.118.3";
+  const BASE_URL = "https://github.com/termux/termux-app/releases/download";
+
+  function apkUrl(version, arch) {
+    const encoded = version.replace(/\+/g, "%2B");
+    return `${BASE_URL}/${version}/termux-app_${encoded}%2Bgithub-debug_${arch}.apk`;
+  }
+
+  function detectArch() {
+    // navigator.userAgentData es más fiable en Chrome para Android
+    const ua = navigator.userAgent || "";
+    if (/arm64|aarch64/i.test(ua)) return "arm64-v8a";
+    if (/armv7|armeabi/i.test(ua))  return "armeabi-v7a";
+    if (/x86_64/i.test(ua))         return "x86_64";
+    if (/x86/i.test(ua))            return "x86";
+    // Los Pixel modernos siempre son arm64-v8a
+    if (/Android/i.test(ua))        return "arm64-v8a";
+    return null;
+  }
+
+  async function fetchLatestVersion() {
+    try {
+      const r = await fetch(
+        "https://api.github.com/repos/termux/termux-app/releases/latest",
+        { headers: { Accept: "application/vnd.github+json" } }
+      );
+      if (!r.ok) throw new Error("API no disponible");
+      const data = await r.json();
+      return data.tag_name || KNOWN_VERSION;
+    } catch {
+      return KNOWN_VERSION;
+    }
+  }
+
+  async function init() {
+    const arch = detectArch();
+    const version = await fetchLatestVersion();
+
+    document.getElementById("versionLabel").textContent =
+      `Versión más reciente: ${version}`;
+
+    if (arch) {
+      document.getElementById("archInfo").textContent =
+        `✓ Arquitectura detectada: ${arch}`;
+      const url = apkUrl(version, arch);
+      const btn = document.getElementById("downloadBtn");
+      btn.href = url;
+      btn.textContent = `⬇ Descargar Termux ${version} (${arch})`;
+    } else {
+      document.getElementById("archInfo").textContent =
+        "⚠ No se detectó arquitectura — usando arm64-v8a (Pixel estándar)";
+      document.getElementById("archInfo").style.borderColor = "#9e6a03";
+      document.getElementById("archInfo").style.color = "#d29922";
+      document.getElementById("archInfo").style.background = "#2d2209";
+      document.getElementById("warningBox").style.display = "block";
+      const url = apkUrl(version, "arm64-v8a");
+      const btn = document.getElementById("downloadBtn");
+      btn.href = url;
+      btn.textContent = `⬇ Descargar Termux ${version} (arm64-v8a)`;
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
