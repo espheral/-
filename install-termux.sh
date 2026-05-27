@@ -27,12 +27,41 @@ latest_version() {
         | sed 's/.*"tag_name": *"\(.*\)".*/\1/'
 }
 
-# ── Construir URL de descarga ──────────────────────────────────────────────────
+# ── Construir URLs de descarga ─────────────────────────────────────────────────
 apk_url() {
     local version="$1" arch="$2"
     local encoded_version
     encoded_version=$(echo "$version" | sed 's/+/%2B/g')
     echo "https://github.com/termux/termux-app/releases/download/${version}/termux-app_${encoded_version}%2Bgithub-debug_${arch}.apk"
+}
+
+sha_url() {
+    local version="$1" arch="$2"
+    local encoded_version
+    encoded_version=$(echo "$version" | sed 's/+/%2B/g')
+    echo "https://github.com/termux/termux-app/releases/download/${version}/termux-app_${encoded_version}%2Bgithub-debug_${arch}.apk.sha256sum"
+}
+
+# ── Verificar integridad del APK ───────────────────────────────────────────────
+verify_apk() {
+    local apk_file="$1" sha_url="$2"
+    local sha_file
+    sha_file=$(mktemp /tmp/termux-sha.XXXXXX)
+
+    log "Descargando checksum SHA256..."
+    curl -fsSL -o "$sha_file" "$sha_url" \
+        || { rm -f "$sha_file"; err "No se pudo descargar el checksum. Abortando por seguridad."; }
+
+    local expected actual
+    expected=$(awk '{print $1}' "$sha_file")
+    actual=$(sha256sum "$apk_file" | awk '{print $1}')
+    rm -f "$sha_file"
+
+    if [[ "$expected" != "$actual" ]]; then
+        rm -f "$apk_file"
+        err "¡FALLO DE INTEGRIDAD SHA256! El APK puede haber sido manipulado. No se instalará."
+    fi
+    log "SHA256 verificado: $actual"
 }
 
 # ── Verificar dependencias locales ─────────────────────────────────────────────
@@ -62,15 +91,24 @@ main() {
     [ -z "$version" ] && err "No se pudo obtener la versión de GitHub. Revisa tu conexión."
     info "Versión: $version"
 
-    local url
+    local url sha_download_url
     url=$(apk_url "$version" "$arch")
-    local apk_file="/tmp/termux-${version}-${arch}.apk"
+    sha_download_url=$(sha_url "$version" "$arch")
+
+    # Nombre de archivo aleatorio — evita race condition TOCTOU con nombre predecible
+    local apk_file
+    apk_file=$(mktemp /tmp/termux-XXXXXX.apk)
+
+    # Limpiar el APK temporal en cualquier salida (éxito, error o Ctrl+C)
+    trap 'rm -f "$apk_file"' EXIT
 
     log "Descargando APK..."
     curl -fL --progress-bar -o "$apk_file" "$url" \
         || err "Descarga fallida. URL: $url"
 
     info "APK guardado en: $apk_file"
+
+    verify_apk "$apk_file" "$sha_download_url"
 
     log "Instalando en el dispositivo via ADB..."
     adb install -r "$apk_file" \
@@ -87,8 +125,6 @@ main() {
     echo "  git clone https://github.com/espheral/- ~/termux-setup"
     echo "  cd ~/termux-setup && chmod +x setup.sh && ./setup.sh"
     echo ""
-
-    rm -f "$apk_file"
 }
 
 main "$@"

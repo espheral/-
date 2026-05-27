@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Termux Android Dev Environment Setup
 
-set -e
+set -euo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -68,9 +68,15 @@ install_languages() {
         make \
         cmake
 
-    # Python tools
+    # Python tools — versiones ancladas para reducir riesgo de supply chain
     pip install --upgrade pip
-    pip install black isort pytest httpx rich typer
+    pip install \
+        "black>=24.0,<25" \
+        "isort>=5.13,<6" \
+        "pytest>=8.0,<9" \
+        "httpx>=0.27,<1" \
+        "rich>=13.0,<14" \
+        "typer>=0.12,<1"
 }
 
 # ── Shell mejorada (zsh + Oh-My-Zsh) ──────────────────────────────────────────
@@ -79,8 +85,10 @@ install_shell() {
     pkg install -y zsh
 
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
-        log "Instalando Oh-My-Zsh..."
-        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+        log "Instalando Oh-My-Zsh (git clone — sin curl|sh)..."
+        # Clonamos directamente en vez de ejecutar un script remoto sin verificar.
+        # curl|sh es vulnerable a MITM y compromiso del CDN.
+        git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git "$HOME/.oh-my-zsh"
     else
         warn "Oh-My-Zsh ya está instalado."
     fi
@@ -133,7 +141,10 @@ setup_ssh() {
         log "Generando clave SSH Ed25519..."
         mkdir -p "$HOME/.ssh"
         chmod 700 "$HOME/.ssh"
-        ssh-keygen -t ed25519 -C "termux-android" -f "$KEY" -N ""
+        # Pedimos passphrase interactivamente en lugar de dejarla vacía (-N "").
+        # Una clave sin passphrase es robable si el dispositivo cae en manos ajenas.
+        warn "Se te pedirá una passphrase. Déjala vacía solo si sabes lo que haces."
+        ssh-keygen -t ed25519 -C "termux-android" -f "$KEY"
         info "Clave pública (agrégala a GitHub/GitLab):"
         echo ""
         cat "${KEY}.pub"
