@@ -20,6 +20,17 @@ O con el script incluido en este repo (desde un PC/Mac con ADB):
 bash install-termux.sh
 ```
 
+### Hard reset del dispositivo (borrado total via USB)
+
+Si necesitas dejar el Pixel como de fábrica antes de reinstalar:
+
+```bash
+bash hard-reset.sh
+```
+
+> **Advertencia:** Borra TODOS los datos (apps, fotos, cuentas). Requiere `adb` y `fastboot`.
+> Pasa `--force` para saltarte la confirmación interactiva.
+
 > **Nota:** Las builds de GitHub están firmadas por el equipo de Termux pero son builds de desarrollo (`github-debug`). Son estables y actualizadas.
 
 ### Opción B — F-Droid
@@ -68,6 +79,8 @@ El script instala y configura automáticamente:
 ```
 .
 ├── setup.sh          # Script principal de instalación
+├── install-termux.sh # Instala Termux via ADB desde PC/Mac
+├── hard-reset.sh     # Hard reset completo del dispositivo via USB
 └── dotfiles/
     ├── .zshrc        # Configuración de zsh con aliases y funciones
     └── init.vim      # Configuración de Neovim optimizada para móvil
