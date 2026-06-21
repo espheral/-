@@ -24,11 +24,24 @@ set hlsearch
 set ignorecase
 set smartcase
 
+" ── Comportamiento ─────────────────────────────────────────────────────────────
+set hidden              " cambia de buffer sin obligar a guardar
+set confirm             " pregunta en vez de fallar al salir con cambios sin guardar
+set splitbelow          " los splits horizontales se abren abajo
+set splitright          " los verticales, a la derecha
+set wildmenu            " menú visual de autocompletado en la línea de comandos
+set wildmode=longest:full,full
+set autoread            " recarga el archivo si cambió fuera de vim
+
 " ── Rendimiento táctil (Android) ──────────────────────────────────────────────
 set ttimeoutlen=50
 set timeoutlen=1000
+set updatetime=300
 set mouse=a
-set clipboard=unnamed
+set lazyredraw          " no redibuja durante macros: más fluido en CPU móvil
+set synmaxcol=300       " no resalta sintaxis en líneas larguísimas (rendimiento)
+" Portapapeles del sistema (requiere termux-api: termux-clipboard-get/set)
+set clipboard=unnamedplus
 
 " ── Archivos ──────────────────────────────────────────────────────────────────
 set nobackup
@@ -36,6 +49,11 @@ set nowritebackup
 set noswapfile
 set undofile
 set undodir=~/.config/nvim/undo
+set undolevels=1000
+" Crea el directorio de undo si no existe (si no, el historial no persiste)
+if !isdirectory($HOME . '/.config/nvim/undo')
+    call mkdir($HOME . '/.config/nvim/undo', 'p')
+endif
 
 " ── Codificación ──────────────────────────────────────────────────────────────
 set encoding=utf-8

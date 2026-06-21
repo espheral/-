@@ -67,11 +67,35 @@ El script instala y configura automáticamente:
 
 ```
 .
-├── setup.sh          # Script principal de instalación
+├── setup.sh          # Script principal de instalación (Termux)
+├── install-termux.sh # Instala el APK de Termux en un Pixel vía ADB (desde PC/Mac)
 └── dotfiles/
     ├── .zshrc        # Configuración de zsh con aliases y funciones
     └── init.vim      # Configuración de Neovim optimizada para móvil
 ```
+
+## Opciones del instalador
+
+`setup.sh` es resiliente (un fallo puntual no aborta todo) y se puede ejecutar por fases:
+
+```bash
+./setup.sh                                # todo, interactivo
+./setup.sh --yes                          # todo, sin preguntas
+./setup.sh shell nvim                     # solo zsh y neovim
+./setup.sh --name "Ana" --email a@x.com   # configura Git sin preguntar
+./setup.sh --help                         # ayuda completa
+```
+
+| Flag | Efecto |
+|------|--------|
+| `-y`, `--yes` | Modo no interactivo (no pregunta nombre/email de Git) |
+| `--name <n>` | Define el nombre de Git (implica `--yes`) |
+| `--email <e>` | Define el email de Git (implica `--yes`) |
+| `-h`, `--help` | Muestra la ayuda |
+
+**Fases disponibles:** `storage` · `update` · `essentials` · `editors` · `languages` · `shell` · `nvim` · `git` · `ssh`
+
+Si algún paquete no se instala, el script lo reporta al final con el comando exacto para reintentarlo.
 
 ## Uso post-instalación
 
@@ -90,6 +114,13 @@ storage         # cd /sdcard
 
 # Backup de dotfiles a /sdcard
 backup_dotfiles
+
+# Actualizar todos los paquetes
+update          # pkg update && pkg upgrade
+
+# Portapapeles del sistema (requiere termux-api)
+echo "hola" | cb   # copia al portapapeles
+cbp                # pega el portapapeles
 ```
 
 ### Aliases de Git

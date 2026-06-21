@@ -4,19 +4,31 @@ ZSH_THEME="robbyrussell"
 
 # robbyrussell no requiere fuentes Powerline — funciona en cualquier terminal Android
 
+# ── Rendimiento de arranque ─────────────────────────────────────────────────────
+# El auto-update de Oh-My-Zsh hace red en cada inicio: lo desactivamos para que
+# la shell abra al instante (actualiza manualmente con `omz update`).
+zstyle ':omz:update' mode disabled
+DISABLE_AUTO_UPDATE="true"
+DISABLE_MAGIC_FUNCTIONS="true"   # pegar texto largo es mucho más rápido
+DISABLE_UNTRACKED_FILES_DIRTY="true"  # `git status` del prompt no escanea repos enormes
+
 plugins=(
     git
-    zsh-autosuggestions
-    zsh-syntax-highlighting
     python
     node
     colored-man-pages
     command-not-found
+    zsh-autosuggestions
+    zsh-syntax-highlighting
 )
+# Nota: zsh-syntax-highlighting DEBE ser el último plugin de la lista.
 
-source "$ZSH/oh-my-zsh.sh"
+# Carga defensiva: si Oh-My-Zsh aún no está instalado, la shell sigue funcionando
+[[ -f "$ZSH/oh-my-zsh.sh" ]] && source "$ZSH/oh-my-zsh.sh"
 
 # ── PATH ───────────────────────────────────────────────────────────────────────
+# `typeset -U` evita entradas duplicadas al re-cargar el .zshrc
+typeset -U path PATH
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="$HOME/go/bin:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -84,6 +96,9 @@ alias nb='npm run build'
 alias pkg-list='pkg list-installed'
 alias storage='cd /sdcard'
 alias home='cd ~'
+alias update='pkg update && pkg upgrade'
+alias cb='termux-clipboard-set'    # uso: echo "texto" | cb
+alias cbp='termux-clipboard-get'   # pega el portapapeles del sistema
 
 # ── Función: crear proyecto rápido ─────────────────────────────────────────────
 mkproject() {
@@ -114,8 +129,22 @@ serve() {
 }
 
 # ── Historial ─────────────────────────────────────────────────────────────────
-HISTSIZE=10000
-SAVEHIST=10000
-setopt HIST_IGNORE_DUPS
-setopt HIST_IGNORE_SPACE
-setopt SHARE_HISTORY
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=50000
+SAVEHIST=50000
+setopt HIST_IGNORE_DUPS          # no guarda comandos repetidos consecutivos
+setopt HIST_IGNORE_ALL_DUPS      # elimina duplicados antiguos
+setopt HIST_IGNORE_SPACE         # comandos que empiezan con espacio no se guardan
+setopt HIST_REDUCE_BLANKS        # limpia espacios sobrantes
+setopt HIST_VERIFY               # al expandir !! muestra antes de ejecutar
+setopt SHARE_HISTORY             # historial compartido entre sesiones
+
+# ── Navegación ──────────────────────────────────────────────────────────────────
+setopt AUTO_CD                   # escribir un directorio equivale a `cd` a él
+setopt AUTO_PUSHD                # cada cd guarda el anterior en la pila
+setopt PUSHD_IGNORE_DUPS
+setopt INTERACTIVE_COMMENTS      # permite # comentarios en la línea de comandos
+
+# ── Autosuggestions ─────────────────────────────────────────────────────────────
+ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE=20   # no sugiere en líneas muy largas (rendimiento)
+ZSH_AUTOSUGGEST_STRATEGY=(history completion)
