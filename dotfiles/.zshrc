@@ -91,6 +91,10 @@ mkproject() {
         echo "Uso: mkproject <nombre>"
         return 1
     fi
+    if [ -e "$1" ]; then
+        echo "Error: '$1' ya existe."
+        return 1
+    fi
     mkdir -p "$1" && cd "$1" && git init
     echo "# $1" > README.md
     echo "Proyecto '$1' creado."

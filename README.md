@@ -67,10 +67,11 @@ El script instala y configura automáticamente:
 
 ```
 .
-├── setup.sh          # Script principal de instalación
+├── setup.sh           # Script principal de instalación (se ejecuta en Termux)
+├── install-termux.sh  # Descarga e instala el APK de Termux vía ADB (se ejecuta en PC/Mac)
 └── dotfiles/
-    ├── .zshrc        # Configuración de zsh con aliases y funciones
-    └── init.vim      # Configuración de Neovim optimizada para móvil
+    ├── .zshrc         # Configuración de zsh con aliases y funciones
+    └── init.vim       # Configuración de Neovim optimizada para móvil
 ```
 
 ## Uso post-instalación
