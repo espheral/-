@@ -114,12 +114,14 @@ backup_dotfiles() {
 serve() {
     local port="${1:-8080}"
     echo "Servidor en http://localhost:$port (Ctrl+C para detener)"
-    python3 -m http.server "$port"
+    # --bind 127.0.0.1 evita exponer el filesystem a otras apps/dispositivos en la red local
+    python3 -m http.server "$port" --bind 127.0.0.1
 }
 
 # ── Historial ─────────────────────────────────────────────────────────────────
 HISTSIZE=10000
 SAVEHIST=10000
 setopt HIST_IGNORE_DUPS
-setopt HIST_IGNORE_SPACE
+setopt HIST_IGNORE_SPACE   # comandos con espacio inicial no se guardan (útil para tokens)
+setopt HIST_REDUCE_BLANKS
 setopt SHARE_HISTORY
