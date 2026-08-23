@@ -80,11 +80,10 @@ alias nr='npm run'
 alias nd='npm run dev'
 alias nb='npm run build'
 
-# ── Termux específico ──────────────────────────────────────────────────────────
-alias pkg-list='pkg list-installed'
-alias storage='cd /sdcard'
+# ── Linux Terminal (Android AVF) específico ─────────────────────────────────────
+alias pkg-list='apt list --installed'
+alias shared='cd /mnt/shared'   # carpeta Descargas de Android, compartida con la VM
 alias home='cd ~'
-alias debian='proot-distro login debian'
 
 # ── Función: crear proyecto rápido ─────────────────────────────────────────────
 mkproject() {
@@ -200,12 +199,12 @@ mkrust() {
 
 # ── Función: backup dotfiles ────────────────────────────────────────────────────
 backup_dotfiles() {
-    local dest="/sdcard/termux-backup-$(date +%Y%m%d)"
+    local dest="/mnt/shared/linux-terminal-backup-$(date +%Y%m%d)"
     mkdir -p "$dest"
     cp ~/.zshrc "$dest/" 2>/dev/null
     cp ~/.config/nvim/init.vim "$dest/" 2>/dev/null
     cp ~/.gitconfig "$dest/" 2>/dev/null
-    echo "Backup guardado en $dest"
+    echo "Backup guardado en $dest (visible en Descargas dentro de Android)"
 }
 
 # ── Servidor HTTP rápido ───────────────────────────────────────────────────────

@@ -80,11 +80,11 @@ alias nr='npm run'
 alias nd='npm run dev'
 alias nb='npm run build'
 
-# ── Termux específico ──────────────────────────────────────────────────────────
-alias pkg-list='pkg list-installed'
+# ── Debian (proot-distro) específico ────────────────────────────────────────────
+alias pkg-list='apt list --installed'
 alias storage='cd /sdcard'
 alias home='cd ~'
-alias debian='proot-distro login debian'
+alias termux='cd /data/data/com.termux/files/home'
 
 # ── Función: crear proyecto rápido ─────────────────────────────────────────────
 mkproject() {
