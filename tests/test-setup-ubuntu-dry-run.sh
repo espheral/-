@@ -31,4 +31,9 @@ if HOME="$tmp_home" "$repo_dir/setup-ubuntu.sh" --token secret >/dev/null 2>&1; 
     exit 1
 fi
 
+if [[ $(id -u) -eq 0 ]] && HOME="$tmp_home" "$repo_dir/setup-ubuntu.sh" --apply --skip-pro >/dev/null 2>&1; then
+    echo "FAIL: --apply should be rejected when the whole script runs as root" >&2
+    exit 1
+fi
+
 echo "PASS: dry-run is non-mutating and argv tokens are rejected"
