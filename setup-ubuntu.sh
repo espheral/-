@@ -92,12 +92,16 @@ preflight() {
     UBUNTU_VERSION=$VERSION_ID
     UBUNTU_CODENAME=$VERSION_CODENAME
 
+    if [[ $MODE == apply && $(id -u) -eq 0 ]]; then
+        die "No ejecutes el script completo como root. Úsalo como usuario normal; pedirá sudo solo cuando sea necesario."
+    fi
+
     grep -Eqi '(microsoft|wsl)' /proc/version 2>/dev/null && IS_WSL=1
     if command -v systemd-detect-virt >/dev/null 2>&1 && systemd-detect-virt -cq; then
         IS_CONTAINER=1
     fi
 
-    if [[ $MODE == apply && $(id -u) -ne 0 ]]; then
+    if [[ $MODE == apply ]]; then
         command -v sudo >/dev/null 2>&1 || die "Se necesita sudo para --apply."
         SUDO=(sudo)
         sudo -v || die "No se pudo validar sudo."
@@ -176,7 +180,7 @@ setup_ssh() {
         return
     fi
     run install -d -m 0700 "$HOME/.ssh"
-    run ssh-keygen -t ed25519 -C "$USER@$(hostname)" -f "$key"
+    run ssh-keygen -t ed25519 -C "$(id -un)@$(hostname)" -f "$key"
     log "Se pedirá una passphrase de forma interactiva; la clave privada nunca se mostrará."
 }
 
@@ -235,7 +239,7 @@ install_docker() {
         printf '    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -> /etc/apt/keyrings/docker.gpg\n'
         printf '    crear /etc/apt/sources.list.d/docker.list para %s\n' "$UBUNTU_CODENAME"
         quote_cmd "${SUDO[@]}" apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-        quote_cmd "${SUDO[@]}" usermod -aG docker "$USER"
+        quote_cmd "${SUDO[@]}" usermod -aG docker "$(id -un)"
         return
     fi
     run_root install -m 0755 -d /etc/apt/keyrings
@@ -254,7 +258,7 @@ install_docker() {
         "$(dpkg --print-architecture)" "$UBUNTU_CODENAME" | run_root tee /etc/apt/sources.list.d/docker.list >/dev/null
     run_root apt-get update
     apt_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    run_root usermod -aG docker "$USER"
+    run_root usermod -aG docker "$(id -un)"
     ((IS_WSL)) && warn "WSL2: verifica systemd antes de intentar iniciar Docker."
 }
 
