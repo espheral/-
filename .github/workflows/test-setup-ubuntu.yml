@@ -1,0 +1,30 @@
+name: Test Ubuntu setup
+
+on:
+  pull_request:
+    paths:
+      - setup-ubuntu.sh
+      - dotfiles/**
+      - tests/**
+      - .github/workflows/test-setup-ubuntu.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck
+      - name: Check Bash syntax
+        run: bash -n setup-ubuntu.sh tests/test-setup-ubuntu-dry-run.sh
+      - name: Run ShellCheck
+        run: shellcheck setup-ubuntu.sh tests/test-setup-ubuntu-dry-run.sh
+      - name: Verify non-mutating dry-run
+        run: bash tests/test-setup-ubuntu-dry-run.sh
