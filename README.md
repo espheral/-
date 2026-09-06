@@ -1,10 +1,107 @@
-# Entorno de Desarrollo en Android con Termux
+# Entorno de Desarrollo: Ubuntu + Termux
 
-Configura un entorno de programación completo en tu móvil Android usando [Termux](https://termux.dev).
+Scripts para montar un entorno de programación reproducible en:
 
-## Instalar Termux
+| Plataforma | Script | Notas |
+|------------|--------|-------|
+| **Ubuntu** (escritorio, servidor o WSL2) | `setup-ubuntu.sh` | Incluye adjuntar **Ubuntu Pro** (plan personal gratuito) |
+| **Android** (Pixel u otro) | `setup.sh` | Se ejecuta dentro de [Termux](https://termux.dev) |
 
-### Opción A — GitHub (última versión, recomendado para Pixel)
+Ambos comparten los mismos dotfiles (`dotfiles/.zshrc`, `dotfiles/init.vim`), que detectan la plataforma en tiempo de carga.
+
+---
+
+## Ubuntu (escritorio / servidor / WSL2)
+
+### Instalación
+
+```bash
+sudo apt install -y git
+git clone https://github.com/espheral/- ~/dev-setup
+cd ~/dev-setup
+chmod +x setup-ubuntu.sh
+
+# Inspección segura: es el modo predeterminado y no modifica el sistema
+./setup-ubuntu.sh
+./setup-ubuntu.sh --dry-run --skip-pro
+./setup-ubuntu.sh --dry-run --with-docker --replace-dotfiles
+
+# Aplicación mínima tras revisar el plan
+./setup-ubuntu.sh --apply --skip-pro
+
+# Las operaciones de mayor alcance requieren opciones expresas:
+# --upgrade-system, --replace-dotfiles, --configure-git,
+# --generate-ssh-key y --with-docker
+```
+
+Para un attach no interactivo puede usarse `UBUNTU_PRO_TOKEN`; el script rechaza tokens por argumento para que no queden en el historial o la lista de procesos. Consulta [la guía de ejecución segura](README-ubuntu-safety.md).
+
+El script instala:
+
+| Categoría | Herramientas |
+|-----------|-------------|
+| Base | build-essential, git, curl, wget, gnupg, jq, htop, tmux, tree, ripgrep, fd, fzf, bat |
+| Shell | zsh, Oh-My-Zsh, autosuggestions, syntax-highlighting |
+| Editores | Neovim, Vim, Nano |
+| Lenguajes | Python 3 (+ venv, pipx), Node.js/npm, Go y Rust/Cargo desde los repositorios de Ubuntu, clang/cmake |
+| Git | configuración global y clave SSH solo con opciones expresas |
+| Ubuntu Pro | cliente `pro`, attach, esm-infra, esm-apps, livepatch y usg; se omite con `--skip-pro` |
+| Opcional | Docker Engine + compose plugin (`--with-docker`) |
+
+### Ubuntu Pro: qué es y qué activa el script
+
+Ubuntu Pro es **gratuito para uso personal en hasta 5 máquinas** (cuenta de Ubuntu One). No incluye soporte telefónico/ticket; todo lo demás sí.
+Solo funciona en versiones **LTS** (20.04, 22.04, 24.04).
+
+| Servicio | ¿Lo activa el script? | Qué aporta |
+|----------|:---------------------:|------------|
+| `esm-infra` | Sí | Parches de seguridad para `main` hasta 10 años (12 con Legacy) |
+| `esm-apps` | Sí | Parches de seguridad para `universe` (~23.000 paquetes extra) |
+| `livepatch` | Sí, salvo WSL/contenedor | Parches de kernel sin reiniciar. Requiere kernel de Canonical + snapd |
+| `usg` | Sí | Herramienta `usg` para auditar/aplicar CIS y DISA-STIG. **Solo instala la herramienta**, no endurece nada |
+| `fips`, `fips-updates` | No | Kernel y libs certificadas FIPS 140. Sustituye el kernel; solo si lo exiges por cumplimiento |
+| `realtime-kernel` | No | Kernel PREEMPT_RT. Sustituye el kernel; solo para cargas de tiempo real |
+| `landscape` | No | Cliente de gestión de flota. Landscape SaaS está incluido en Pro, pero requiere configuración propia |
+| `anbox-cloud`, `ros` | No | Casos de uso específicos |
+
+Además desactiva los avisos comerciales de apt (`pro config set apt_news=false`) salvo que uses `--keep-apt-news`.
+
+### Verificación
+
+```bash
+pro status                      # attached: yes, servicios enabled/disabled
+pro security-status             # cuántos paquetes cubre esm-infra / esm-apps
+pro security-status --esm-apps  # detalle de universe
+sudo pro fix CVE-2024-XXXX      # aplicar el parche de un CVE concreto
+canonical-livepatch status      # solo si livepatch está activo
+sudo usg audit cis_level1_workstation   # auditoría CIS (no modifica nada)
+```
+
+Alias disponibles tras el setup: `pro-status`, `pro-sec`, `pro-fix`, `up` (update+upgrade), `winhome` (solo WSL).
+
+### Notas para WSL2
+
+- `pro attach` y ESM funcionan igual que en un Ubuntu nativo. **Livepatch no aplica**: el kernel lo pone Microsoft, no Canonical. El script lo detecta y lo omite.
+- Cada instancia WSL cuenta como **una máquina** de las 5 del plan gratuito. Para liberar una: `sudo pro detach` antes de destruirla, o desde el dashboard web.
+- Docker en WSL2 requiere systemd: en `/etc/wsl.conf` añade la sección `[boot]` con `systemd=true` y luego ejecuta `wsl --shutdown` desde PowerShell.
+
+### Gestión de máquinas adjuntas
+
+```bash
+sudo pro detach                 # libera esta máquina del plan
+sudo pro disable livepatch      # desactivar un servicio concreto
+sudo pro refresh                # refrescar contrato/config tras cambios en el dashboard
+```
+
+Las máquinas adjuntas se ven y se eliminan en https://ubuntu.com/pro/dashboard.
+
+---
+
+## Android con Termux
+
+### Instalar Termux
+
+#### Opción A — GitHub (última versión, recomendado para Pixel)
 
 Los Pixel usan arquitectura **arm64-v8a**. Descarga el APK directamente desde las releases oficiales:
 
@@ -22,11 +119,11 @@ bash install-termux.sh
 
 > **Nota:** Las builds de GitHub están firmadas por el equipo de Termux pero son builds de desarrollo (`github-debug`). Son estables y actualizadas.
 
-### Opción B — F-Droid
+#### Opción B — F-Droid
 
 Instala F-Droid primero desde [f-droid.org](https://f-droid.org) y busca **Termux** dentro de la app.
 
-### Opción C — Google Play (no recomendado)
+#### Opción C — Google Play (no recomendado)
 
 La versión de Play Store no se actualiza desde 2020 y tiene bugs conocidos.
 
@@ -67,11 +164,12 @@ El script instala y configura automáticamente:
 
 ```
 .
-├── setup.sh           # Script principal de instalación (se ejecuta en Termux)
+├── setup-ubuntu.sh    # Instalación en Ubuntu (escritorio/servidor/WSL2) + Ubuntu Pro
+├── setup.sh           # Instalación en Termux (Android)
 ├── install-termux.sh  # Descarga e instala el APK de Termux vía ADB (se ejecuta en PC/Mac)
 └── dotfiles/
-    ├── .zshrc         # Configuración de zsh con aliases y funciones
-    └── init.vim       # Configuración de Neovim optimizada para móvil
+    ├── .zshrc         # Configuración de zsh compartida; detecta Termux vs Ubuntu
+    └── init.vim       # Configuración de Neovim
 ```
 
 ## Uso post-instalación
@@ -89,7 +187,7 @@ activate        # activa .venv ya existente
 # Ir al almacenamiento del teléfono
 storage         # cd /sdcard
 
-# Backup de dotfiles a /sdcard
+# Backup de dotfiles (a /sdcard en Termux, a ~/dotfiles-backup-* en Ubuntu)
 backup_dotfiles
 ```
 
