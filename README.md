@@ -21,19 +21,20 @@ git clone https://github.com/espheral/- ~/dev-setup
 cd ~/dev-setup
 chmod +x setup-ubuntu.sh
 
-# Opción 1: magic attach (interactivo, sin token; te dará un código para https://ubuntu.com/pro/attach)
+# Inspección segura: es el modo predeterminado y no modifica el sistema
 ./setup-ubuntu.sh
+./setup-ubuntu.sh --dry-run --skip-pro
+./setup-ubuntu.sh --dry-run --with-docker --replace-dotfiles
 
-# Opción 2: con token (no interactivo). Token en https://ubuntu.com/pro/dashboard
-./setup-ubuntu.sh --token C1xxxxxxxxxxxxxxxxxxxxxx
+# Aplicación mínima tras revisar el plan
+./setup-ubuntu.sh --apply --skip-pro
 
-# Opciones adicionales
-./setup-ubuntu.sh --with-docker      # Docker Engine desde el repo oficial
-./setup-ubuntu.sh --skip-pro         # no tocar Ubuntu Pro
-./setup-ubuntu.sh --keep-apt-news    # no desactivar los avisos comerciales de apt
+# Las operaciones de mayor alcance requieren opciones expresas:
+# --upgrade-system, --replace-dotfiles, --configure-git,
+# --generate-ssh-key y --with-docker
 ```
 
-Variables de entorno equivalentes: `UBUNTU_PRO_TOKEN`, `WITH_DOCKER=1`, `SKIP_PRO=1`.
+Para un attach no interactivo puede usarse `UBUNTU_PRO_TOKEN`; el script rechaza tokens por argumento para que no queden en el historial o la lista de procesos. Consulta [la guía de ejecución segura](README-ubuntu-safety.md).
 
 El script instala:
 
@@ -42,9 +43,9 @@ El script instala:
 | Base | build-essential, git, curl, wget, gnupg, jq, htop, tmux, tree, ripgrep, fd, fzf, bat |
 | Shell | zsh, Oh-My-Zsh, autosuggestions, syntax-highlighting |
 | Editores | Neovim, Vim, Nano |
-| Lenguajes | Python 3 (+ venv, pipx), Node.js 22 LTS (NodeSource), Go (apt), Rust (rustup), clang/cmake |
-| Git | configuración global + clave SSH Ed25519 |
-| Ubuntu Pro | cliente `pro`, attach, esm-infra, esm-apps, livepatch, usg |
+| Lenguajes | Python 3 (+ venv, pipx), Node.js/npm, Go y Rust/Cargo desde los repositorios de Ubuntu, clang/cmake |
+| Git | configuración global y clave SSH solo con opciones expresas |
+| Ubuntu Pro | cliente `pro`, attach, esm-infra, esm-apps, livepatch y usg; se omite con `--skip-pro` |
 | Opcional | Docker Engine + compose plugin (`--with-docker`) |
 
 ### Ubuntu Pro: qué es y qué activa el script
