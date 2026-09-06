@@ -80,10 +80,28 @@ alias nr='npm run'
 alias nd='npm run dev'
 alias nb='npm run build'
 
-# ── Termux específico ──────────────────────────────────────────────────────────
-alias pkg-list='pkg list-installed'
-alias storage='cd /sdcard'
+# ── Específico por plataforma ─────────────────────────────────────────────────
 alias home='cd ~'
+
+if [ -n "$TERMUX_VERSION" ] || [ -d /data/data/com.termux ]; then
+    # Termux (Android)
+    alias pkg-list='pkg list-installed'
+    alias storage='cd /sdcard'
+    alias up='pkg update && pkg upgrade -y'
+elif command -v apt-get >/dev/null 2>&1; then
+    # Ubuntu / Debian
+    alias up='sudo apt update && sudo apt upgrade -y'
+    alias pkg-list='apt list --installed 2>/dev/null'
+    command -v fdfind >/dev/null 2>&1 && alias fd='fdfind'
+    command -v batcat >/dev/null 2>&1 && alias bat='batcat'
+    if command -v pro >/dev/null 2>&1; then
+        # Ubuntu Pro
+        alias pro-status='pro status'
+        alias pro-sec='pro security-status'
+        alias pro-fix='sudo pro fix'          # pro-fix CVE-2024-XXXX
+    fi
+    grep -qi microsoft /proc/version 2>/dev/null && alias winhome='cd /mnt/c/Users'
+fi
 
 # ── Función: crear proyecto rápido ─────────────────────────────────────────────
 mkproject() {
@@ -102,7 +120,12 @@ mkproject() {
 
 # ── Función: backup dotfiles ────────────────────────────────────────────────────
 backup_dotfiles() {
-    local dest="/sdcard/termux-backup-$(date +%Y%m%d)"
+    local dest
+    if [ -d /sdcard ]; then
+        dest="/sdcard/termux-backup-$(date +%Y%m%d)"
+    else
+        dest="$HOME/dotfiles-backup-$(date +%Y%m%d)"
+    fi
     mkdir -p "$dest"
     cp ~/.zshrc "$dest/" 2>/dev/null
     cp ~/.config/nvim/init.vim "$dest/" 2>/dev/null
