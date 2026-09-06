@@ -1,318 +1,277 @@
 #!/usr/bin/env bash
-# Ubuntu Dev Environment Setup (escritorio, servidor o WSL2) + Ubuntu Pro gratuito
-#
-# Uso:
-#   ./setup-ubuntu.sh [--token TOKEN] [--skip-pro] [--with-docker] [--no-apt-news]
-#
-# Variables de entorno equivalentes:
-#   UBUNTU_PRO_TOKEN   token de https://ubuntu.com/pro/dashboard (si se omite: magic attach interactivo)
-#   SKIP_PRO=1         no tocar Ubuntu Pro
-#   WITH_DOCKER=1      instalar Docker Engine desde el repo oficial
-#
-# Requiere: Ubuntu LTS (20.04 / 22.04 / 24.04) y sudo.
+# Safe Ubuntu development environment setup for 20.04/22.04/24.04 and WSL2.
 
-set -euo pipefail
+set -Eeuo pipefail
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
-log()  { echo -e "${GREEN}[+]${NC} $1"; }
-warn() { echo -e "${YELLOW}[!]${NC} $1"; }
-err()  { echo -e "${RED}[x]${NC} $1"; exit 1; }
-info() { echo -e "${BLUE}[*]${NC} $1"; }
-
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PRO_TOKEN="${UBUNTU_PRO_TOKEN:-}"
-SKIP_PRO="${SKIP_PRO:-0}"
-WITH_DOCKER="${WITH_DOCKER:-0}"
-APT_NEWS="${APT_NEWS:-0}"     # 0 = desactivar los avisos comerciales de apt (pro config apt_news)
+MODE=dry-run
+WITH_DOCKER=0
+SKIP_PRO=0
+KEEP_APT_NEWS=0
+UPGRADE_SYSTEM=0
+REPLACE_DOTFILES=0
+CONFIGURE_GIT=0
+GENERATE_SSH_KEY=0
 IS_WSL=0
 IS_CONTAINER=0
+SUDO=()
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# ── Argumentos ─────────────────────────────────────────────────────────────────
-while [ $# -gt 0 ]; do
+usage() {
+    cat <<'EOF'
+Usage: ./setup-ubuntu.sh [options]
+
+The default is --dry-run: it performs checks and prints the planned changes.
+Nothing is installed or overwritten until --apply is supplied.
+
+  --dry-run             inspect and print the plan (default)
+  --apply               perform the planned changes
+  --upgrade-system      run apt-get upgrade (never enabled by default)
+  --replace-dotfiles    replace ~/.zshrc and Neovim config after backing them up
+  --configure-git       set a small set of global Git defaults
+  --generate-ssh-key    create ~/.ssh/id_ed25519 if no key exists
+  --skip-pro            do not install, attach or configure Ubuntu Pro
+  --with-docker         install Docker Engine from Docker's official repository
+  --keep-apt-news       preserve the current Ubuntu Pro apt_news setting
+  -h, --help            show this help
+
+For non-interactive Pro attach, set UBUNTU_PRO_TOKEN in the environment. Never
+put the token on the command line. Without a token, --apply uses magic attach
+only when stdin is a TTY.
+EOF
+}
+
+log()  { printf '[+] %s\n' "$*"; }
+warn() { printf '[!] %s\n' "$*" >&2; }
+die()  { printf '[x] %s\n' "$*" >&2; exit 1; }
+
+quote_cmd() {
+    printf '    '
+    printf '%q ' "$@"
+    printf '\n'
+}
+
+run() {
+    if [[ "$MODE" == dry-run ]]; then
+        quote_cmd "$@"
+    else
+        "$@"
+    fi
+}
+
+run_root() {
+    run "${SUDO[@]}" "$@"
+}
+
+while (($#)); do
     case "$1" in
-        --token)        PRO_TOKEN="${2:-}"; shift 2 ;;
-        --token=*)      PRO_TOKEN="${1#*=}"; shift ;;
-        --skip-pro)     SKIP_PRO=1; shift ;;
-        --with-docker)  WITH_DOCKER=1; shift ;;
-        --keep-apt-news) APT_NEWS=1; shift ;;
-        -h|--help)      sed -n '2,13p' "$0"; exit 0 ;;
-        *)              err "Argumento desconocido: $1 (usa --help)" ;;
+        --dry-run) MODE=dry-run ;;
+        --apply) MODE=apply ;;
+        --upgrade-system) UPGRADE_SYSTEM=1 ;;
+        --replace-dotfiles) REPLACE_DOTFILES=1 ;;
+        --configure-git) CONFIGURE_GIT=1 ;;
+        --generate-ssh-key) GENERATE_SSH_KEY=1 ;;
+        --skip-pro) SKIP_PRO=1 ;;
+        --with-docker) WITH_DOCKER=1 ;;
+        --keep-apt-news) KEEP_APT_NEWS=1 ;;
+        -h|--help) usage; exit 0 ;;
+        --token|--token=*) die "No pases tokens por argv; usa UBUNTU_PRO_TOKEN." ;;
+        *) die "Argumento desconocido: $1 (usa --help)." ;;
     esac
+    shift
 done
 
-echo -e "${BLUE}"
-echo "╔══════════════════════════════════════╗"
-echo "║   Ubuntu Dev Setup + Ubuntu Pro      ║"
-echo "╚══════════════════════════════════════╝"
-echo -e "${NC}"
-
-# ── Comprobaciones previas ─────────────────────────────────────────────────────
 preflight() {
-    [ -r /etc/os-release ] || err "No se encontró /etc/os-release. ¿Es esto Ubuntu?"
+    [[ -r /etc/os-release ]] || die "No se encontró /etc/os-release."
     # shellcheck disable=SC1091
     . /etc/os-release
-    [ "${ID:-}" = "ubuntu" ] || err "Este script es solo para Ubuntu (detectado: ${ID:-desconocido})."
-    UBUNTU_VERSION="${VERSION_ID}"
-    UBUNTU_CODENAME="${VERSION_CODENAME}"
+    [[ ${ID:-} == ubuntu ]] || die "Solo se admite Ubuntu (detectado: ${ID:-desconocido})."
+    case "${VERSION_ID:-}" in
+        20.04|22.04|24.04) ;;
+        *) die "Versión no admitida: ${VERSION_ID:-desconocida}; se requiere Ubuntu LTS 20.04, 22.04 o 24.04." ;;
+    esac
+    UBUNTU_VERSION=$VERSION_ID
+    UBUNTU_CODENAME=$VERSION_CODENAME
 
-    if [ "$(id -u)" -eq 0 ]; then
-        SUDO=""
-    else
-        command -v sudo >/dev/null || err "Se necesita sudo."
-        SUDO="sudo"
-        $SUDO -v || err "No se pudo obtener sudo."
+    grep -Eqi '(microsoft|wsl)' /proc/version 2>/dev/null && IS_WSL=1
+    if command -v systemd-detect-virt >/dev/null 2>&1 && systemd-detect-virt -cq; then
+        IS_CONTAINER=1
     fi
 
-    grep -qi microsoft /proc/version 2>/dev/null && IS_WSL=1
-    if command -v systemd-detect-virt >/dev/null 2>&1; then
-        systemd-detect-virt -cq && IS_CONTAINER=1
+    if [[ $MODE == apply && $(id -u) -ne 0 ]]; then
+        command -v sudo >/dev/null 2>&1 || die "Se necesita sudo para --apply."
+        SUDO=(sudo)
+        sudo -v || die "No se pudo validar sudo."
     fi
 
-    info "Ubuntu ${UBUNTU_VERSION} (${UBUNTU_CODENAME})  WSL=${IS_WSL}  contenedor=${IS_CONTAINER}"
-    export DEBIAN_FRONTEND=noninteractive
+    log "Modo=$MODE Ubuntu=$UBUNTU_VERSION codename=$UBUNTU_CODENAME WSL=$IS_WSL contenedor=$IS_CONTAINER"
+    [[ -r "$REPO_DIR/dotfiles/.zshrc" ]] || die "Falta dotfiles/.zshrc."
+    [[ -r "$REPO_DIR/dotfiles/init.vim" ]] || die "Falta dotfiles/init.vim."
 }
 
-apt_install() { $SUDO apt-get install -y --no-install-recommends "$@"; }
+apt_install() {
+    run_root apt-get install -y --no-install-recommends "$@"
+}
 
-# ── Actualizar sistema ─────────────────────────────────────────────────────────
 update_packages() {
-    log "Actualizando paquetes..."
-    $SUDO apt-get update -y
-    $SUDO apt-get upgrade -y
-}
-
-# ── Herramientas esenciales ────────────────────────────────────────────────────
-install_essentials() {
-    log "Instalando herramientas esenciales..."
-    apt_install \
-        build-essential git curl wget ca-certificates gnupg lsb-release \
-        openssh-client tar zip unzip xz-utils jq \
-        htop tmux tree ripgrep fd-find fzf bat \
-        software-properties-common apt-transport-https
-}
-
-# ── Editores ───────────────────────────────────────────────────────────────────
-install_editors() {
-    log "Instalando editores..."
-    apt_install neovim vim nano
-}
-
-# ── Lenguajes ──────────────────────────────────────────────────────────────────
-install_languages() {
-    log "Instalando Python..."
-    apt_install python3 python3-pip python3-venv pipx
-    pipx ensurepath >/dev/null 2>&1 || true
-    for tool in black isort pytest httpx rich typer; do
-        pipx install "$tool" >/dev/null 2>&1 || warn "pipx: no se pudo instalar $tool"
-    done
-
-    log "Instalando Node.js LTS (NodeSource 22.x)..."
-    if ! command -v node >/dev/null 2>&1 || [ "$(node -v | cut -d. -f1 | tr -d v)" -lt 20 ]; then
-        $SUDO install -m 0755 -d /etc/apt/keyrings
-        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
-            | $SUDO gpg --dearmor --yes -o /etc/apt/keyrings/nodesource.gpg
-        echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
-            | $SUDO tee /etc/apt/sources.list.d/nodesource.list >/dev/null
-        $SUDO apt-get update -y
-        apt_install nodejs
+    log "Índices APT"
+    run_root apt-get update
+    if ((UPGRADE_SYSTEM)); then
+        log "Actualización completa solicitada explícitamente"
+        run_root apt-get upgrade -y
     else
-        warn "Node $(node -v) ya presente, se omite NodeSource."
-    fi
-
-    log "Instalando Go (apt) y toolchain C/C++..."
-    apt_install golang-go clang make cmake pkg-config
-
-    if ! command -v rustc >/dev/null 2>&1 && [ ! -x "$HOME/.cargo/bin/rustc" ]; then
-        log "Instalando Rust (rustup)..."
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
-    else
-        warn "Rust ya está instalado."
+        log "apt-get upgrade omitido (usa --upgrade-system para autorizarlo)"
     fi
 }
 
-# ── Shell: zsh + Oh-My-Zsh ─────────────────────────────────────────────────────
-install_shell() {
-    log "Instalando zsh..."
-    apt_install zsh
-
-    if [ ! -d "$HOME/.oh-my-zsh" ]; then
-        log "Instalando Oh-My-Zsh..."
-        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-    else
-        warn "Oh-My-Zsh ya está instalado."
-    fi
-
-    local ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
-    [ -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions" ] \
-        || git clone https://github.com/zsh-users/zsh-autosuggestions "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
-    [ -d "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" ] \
-        || git clone https://github.com/zsh-users/zsh-syntax-highlighting "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
-
-    [ -f "$HOME/.zshrc" ] && cp -f "$HOME/.zshrc" "$HOME/.zshrc.bak.$(date +%Y%m%d%H%M%S)"
-    cp -f "$REPO_DIR/dotfiles/.zshrc" "$HOME/.zshrc"
-
-    if [ "$SHELL" != "$(command -v zsh)" ]; then
-        $SUDO chsh -s "$(command -v zsh)" "$USER" || warn "Cambia el shell manualmente: chsh -s $(command -v zsh)"
-    fi
+install_packages() {
+    log "Paquetes de repositorios Ubuntu"
+    apt_install build-essential git curl wget ca-certificates gnupg lsb-release \
+        openssh-client tar zip unzip xz-utils jq htop tmux tree ripgrep fd-find \
+        fzf bat software-properties-common python3 python3-pip python3-venv pipx \
+        neovim vim nano zsh nodejs npm golang-go rustc cargo clang make cmake pkg-config
 }
 
-# ── Neovim ─────────────────────────────────────────────────────────────────────
-install_nvim_config() {
-    log "Configurando Neovim..."
-    mkdir -p "$HOME/.config/nvim/undo"
-    cp -f "$REPO_DIR/dotfiles/init.vim" "$HOME/.config/nvim/init.vim"
+backup_path() {
+    local src=$1 backup_dir=$2
+    [[ -e "$src" || -L "$src" ]] || return 0
+    run mkdir -p "$backup_dir"
+    run cp -a -- "$src" "$backup_dir/"
 }
 
-# ── Git ────────────────────────────────────────────────────────────────────────
+install_dotfiles() {
+    if (( ! REPLACE_DOTFILES )); then
+        log "Dotfiles omitidos (usa --replace-dotfiles para autorizar copia y sustitución)"
+        return
+    fi
+    local stamp backup_dir
+    stamp=$(date -u +%Y%m%dT%H%M%SZ)
+    backup_dir="$HOME/.local/state/dev-setup/backups/$stamp"
+    log "Copia previa de dotfiles en $backup_dir"
+    backup_path "$HOME/.zshrc" "$backup_dir"
+    backup_path "$HOME/.config/nvim/init.vim" "$backup_dir"
+    run mkdir -p "$HOME/.config/nvim/undo"
+    run install -m 0644 "$REPO_DIR/dotfiles/.zshrc" "$HOME/.zshrc"
+    run install -m 0644 "$REPO_DIR/dotfiles/init.vim" "$HOME/.config/nvim/init.vim"
+}
+
 configure_git() {
-    log "Configurando Git..."
-    if [ -t 0 ]; then
-        read -rp "Nombre para Git (Enter para omitir): " git_name
-        read -rp "Email para Git (Enter para omitir): " git_email
-        [ -n "$git_name" ]  && git config --global user.name  "$git_name"
-        [ -n "$git_email" ] && git config --global user.email "$git_email"
-    else
-        warn "Sin TTY: se omite nombre/email de Git."
+    if (( ! CONFIGURE_GIT )); then
+        log "Git global omitido (usa --configure-git)"
+        return
     fi
-    git config --global init.defaultBranch main
-    git config --global core.editor nvim
-    git config --global pull.rebase false
-    git config --global color.ui auto
+    run git config --global init.defaultBranch main
+    run git config --global core.editor nvim
+    run git config --global pull.rebase false
+    run git config --global color.ui auto
 }
 
-# ── SSH ────────────────────────────────────────────────────────────────────────
 setup_ssh() {
-    local KEY="$HOME/.ssh/id_ed25519"
-    mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
-    if [ ! -f "$KEY" ]; then
-        log "Generando clave SSH Ed25519..."
-        ssh-keygen -t ed25519 -C "$USER@$(hostname)" -f "$KEY" -N ""
-    else
-        warn "Clave SSH ya existe en $KEY"
+    if (( ! GENERATE_SSH_KEY )); then
+        log "Generación de clave SSH omitida (usa --generate-ssh-key)"
+        return
     fi
-    info "Clave pública (agrégala a GitHub/GitLab):"
-    echo; cat "${KEY}.pub"; echo
+    local key="$HOME/.ssh/id_ed25519"
+    if [[ -e "$key" ]]; then
+        log "La clave $key ya existe; no se toca"
+        return
+    fi
+    run install -d -m 0700 "$HOME/.ssh"
+    run ssh-keygen -t ed25519 -C "$USER@$(hostname)" -f "$key"
+    log "Se pedirá una passphrase de forma interactiva; la clave privada nunca se mostrará."
 }
 
-# ── Ubuntu Pro (plan personal gratuito: hasta 5 máquinas) ──────────────────────
 pro_attached() {
-    $SUDO pro status --format json 2>/dev/null | jq -e '.attached == true' >/dev/null 2>&1
-}
-
-pro_enable() {
-    local svc="$1"
-    if $SUDO pro status --format json 2>/dev/null \
-        | jq -e --arg s "$svc" '.services[] | select(.name==$s and .status=="enabled")' >/dev/null 2>&1; then
-        warn "Pro: $svc ya estaba habilitado."
-        return 0
-    fi
-    log "Pro: habilitando $svc..."
-    $SUDO pro enable "$svc" --assume-yes || warn "Pro: no se pudo habilitar $svc (revisa 'pro status')."
+    run_root pro status --format json >/dev/null
 }
 
 setup_ubuntu_pro() {
-    if [ "$SKIP_PRO" = "1" ]; then
-        warn "Ubuntu Pro omitido (--skip-pro)."
-        return 0
+    if ((SKIP_PRO)); then
+        log "Ubuntu Pro omitido"
+        return
+    fi
+    log "Ubuntu Pro"
+    apt_install ubuntu-pro-client
+    if [[ $MODE == dry-run ]]; then
+        if [[ -n ${UBUNTU_PRO_TOKEN:-} ]]; then
+            log "Se usaría UBUNTU_PRO_TOKEN (valor oculto)"
+        else
+            log "Se usaría magic attach en una terminal interactiva"
+        fi
+        quote_cmd "${SUDO[@]}" pro attach --no-auto-enable '<token-oculto-o-magic-attach>'
+        quote_cmd "${SUDO[@]}" pro enable esm-infra --assume-yes
+        quote_cmd "${SUDO[@]}" pro enable esm-apps --assume-yes
+        ((IS_WSL || IS_CONTAINER)) || quote_cmd "${SUDO[@]}" pro enable livepatch --assume-yes
+        quote_cmd "${SUDO[@]}" pro enable usg --assume-yes
+        ((KEEP_APT_NEWS)) || quote_cmd "${SUDO[@]}" pro config set apt_news=false
+        return
     fi
 
-    case "$UBUNTU_VERSION" in
-        *.04) ;;
-        *) warn "Ubuntu Pro solo aplica a versiones LTS. Detectado ${UBUNTU_VERSION}; se omite."; return 0 ;;
-    esac
-
-    log "Instalando cliente de Ubuntu Pro..."
-    apt_install ubuntu-pro-client 2>/dev/null || apt_install ubuntu-advantage-tools
-
-    if pro_attached; then
-        warn "Esta máquina ya está adjunta a Ubuntu Pro."
-    else
-        if [ -n "$PRO_TOKEN" ]; then
-            log "Adjuntando con token..."
-            $SUDO pro attach --no-auto-enable "$PRO_TOKEN"
-        elif [ -t 0 ]; then
-            info "Sin token: se usará 'magic attach'. Sigue las instrucciones en pantalla"
-            info "(abre https://ubuntu.com/pro/attach e introduce el código que aparecerá)."
-            $SUDO pro attach --no-auto-enable
+    if ! pro_attached; then
+        if [[ -n ${UBUNTU_PRO_TOKEN:-} ]]; then
+            run_root pro attach --no-auto-enable "$UBUNTU_PRO_TOKEN"
+            unset UBUNTU_PRO_TOKEN
+        elif [[ -t 0 ]]; then
+            run_root pro attach --no-auto-enable
         else
-            warn "Sin token y sin TTY: no se puede adjuntar. Exporta UBUNTU_PRO_TOKEN o ejecuta 'sudo pro attach' luego."
-            return 0
+            die "Ubuntu Pro no está adjunto y no hay TTY/token de entorno; usa --skip-pro o magic attach."
         fi
     fi
-
-    # Servicios incluidos en el plan gratuito y seguros de activar en cualquier máquina
-    pro_enable esm-infra
-    pro_enable esm-apps
-
-    # Livepatch necesita kernel de Canonical + snapd: no aplica en WSL ni contenedores
-    if [ "$IS_WSL" = "1" ] || [ "$IS_CONTAINER" = "1" ]; then
-        warn "Livepatch omitido (WSL/contenedor no usan kernel de Canonical)."
+    run_root pro enable esm-infra --assume-yes
+    run_root pro enable esm-apps --assume-yes
+    if ((IS_WSL || IS_CONTAINER)); then
+        log "Livepatch omitido en WSL/contenedor"
     else
-        pro_enable livepatch
+        run_root pro enable livepatch --assume-yes
     fi
-
-    # USG (Ubuntu Security Guide): solo añade el repo y la herramienta 'usg'. No endurece nada por sí solo.
-    pro_enable usg
-
-    if [ "$APT_NEWS" = "0" ]; then
-        $SUDO pro config set apt_news=false || true
-    fi
-
-    info "Servicios NO activados a propósito (cambian el kernel o restringen updates):"
-    info "  fips / fips-updates / realtime-kernel  →  'sudo pro enable <svc>' solo si lo necesitas."
-    echo
-    $SUDO pro status || true
+    run_root pro enable usg --assume-yes
+    ((KEEP_APT_NEWS)) || run_root pro config set apt_news=false
 }
 
-# ── Docker (opcional) ──────────────────────────────────────────────────────────
 install_docker() {
-    [ "$WITH_DOCKER" = "1" ] || return 0
-    if command -v docker >/dev/null 2>&1; then
-        warn "Docker ya está instalado."
-        return 0
+    ((WITH_DOCKER)) || { log "Docker omitido (usa --with-docker)"; return; }
+    log "Docker Engine desde el repositorio oficial"
+    if [[ $MODE == dry-run ]]; then
+        quote_cmd "${SUDO[@]}" install -m 0755 -d /etc/apt/keyrings
+        printf '    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -> /etc/apt/keyrings/docker.gpg\n'
+        printf '    crear /etc/apt/sources.list.d/docker.list para %s\n' "$UBUNTU_CODENAME"
+        quote_cmd "${SUDO[@]}" apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        quote_cmd "${SUDO[@]}" usermod -aG docker "$USER"
+        return
     fi
-    log "Instalando Docker Engine (repo oficial)..."
-    $SUDO install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | $SUDO tee /etc/apt/keyrings/docker.asc >/dev/null
-    $SUDO chmod a+r /etc/apt/keyrings/docker.asc
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${UBUNTU_CODENAME} stable" \
-        | $SUDO tee /etc/apt/sources.list.d/docker.list >/dev/null
-    $SUDO apt-get update -y
+    run_root install -m 0755 -d /etc/apt/keyrings
+    local tmp_key
+    tmp_key=$(mktemp)
+    if ! curl --proto '=https' --tlsv1.2 -fsSL https://download.docker.com/linux/ubuntu/gpg -o "$tmp_key"; then
+        rm -f -- "$tmp_key"
+        die "No se pudo descargar la clave de Docker."
+    fi
+    if ! run_root gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg "$tmp_key"; then
+        rm -f -- "$tmp_key"
+        die "No se pudo instalar la clave de Docker."
+    fi
+    rm -f -- "$tmp_key"
+    printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu %s stable\n' \
+        "$(dpkg --print-architecture)" "$UBUNTU_CODENAME" | run_root tee /etc/apt/sources.list.d/docker.list >/dev/null
+    run_root apt-get update
     apt_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    $SUDO usermod -aG docker "$USER" || true
-    if [ "$IS_WSL" = "1" ]; then
-        warn "WSL2: Docker necesita systemd. Comprueba que /etc/wsl.conf tiene [boot] systemd=true y reinicia con 'wsl --shutdown'."
-    fi
+    run_root usermod -aG docker "$USER"
+    ((IS_WSL)) && warn "WSL2: verifica systemd antes de intentar iniciar Docker."
 }
 
-# ── Resumen ────────────────────────────────────────────────────────────────────
 summary() {
-    echo
-    echo -e "${GREEN}╔══════════════════════════════════════╗"
-    echo "║         ¡Setup completado!           ║"
-    echo "╚══════════════════════════════════════╝${NC}"
-    echo
-    info "Versiones instaladas:"
-    command -v python3 &>/dev/null && echo "  Python:  $(python3 --version)"
-    command -v node    &>/dev/null && echo "  Node:    $(node --version)"
-    command -v nvim    &>/dev/null && echo "  Neovim:  $(nvim --version | head -1)"
-    command -v git     &>/dev/null && echo "  Git:     $(git --version)"
-    command -v go      &>/dev/null && echo "  Go:      $(go version)"
-    [ -x "$HOME/.cargo/bin/rustc" ] && echo "  Rust:    $("$HOME/.cargo/bin/rustc" --version)"
-    command -v docker  &>/dev/null && echo "  Docker:  $(docker --version)"
-    command -v pro     &>/dev/null && echo "  Pro:     $(pro version)"
-    echo
-    warn "Cierra sesión y vuelve a entrar (o reinicia) para aplicar zsh, grupo docker y PATH."
+    log "Plan completado en modo $MODE"
+    if [[ $MODE == dry-run ]]; then
+        log "No se ha modificado el sistema. Revisa el plan y usa --apply solo en el host correcto."
+    else
+        log "Verifica versiones, dotfiles, Git, Pro y Docker según las opciones autorizadas."
+    fi
 }
 
 main() {
     preflight
     update_packages
-    install_essentials
-    install_editors
-    install_languages
-    install_shell
-    install_nvim_config
+    install_packages
+    install_dotfiles
     configure_git
     setup_ssh
     setup_ubuntu_pro
