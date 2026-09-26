@@ -68,15 +68,10 @@ install_languages() {
         make \
         cmake
 
-    # Python tools — versiones ancladas para reducir riesgo de supply chain
-    pip install --upgrade pip
-    pip install \
-        "black>=24.0,<25" \
-        "isort>=5.13,<6" \
-        "pytest>=8.0,<9" \
-        "httpx>=0.27,<1" \
-        "rich>=13.0,<14" \
-        "typer>=0.12,<1"
+    # Python tools
+    # No se ejecuta "pip install --upgrade pip": Termux lo bloquea porque rompe el paquete python-pip.
+    # Sin topes de versión mayor: los rangos no mitigan supply chain (eso requeriría --require-hashes).
+    pip install black isort pytest httpx rich typer
 }
 
 # ── Shell mejorada (zsh + Oh-My-Zsh) ──────────────────────────────────────────
