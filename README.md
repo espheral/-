@@ -170,10 +170,50 @@ El script instala y configura automáticamente:
 ├── setup-linux-terminal.sh  # Atajo de setup-debian.sh --target avf
 ├── sync-dotfiles.sh         # Sincroniza dotfiles entre Termux, proot y AVF vía Descargas
 ├── install-termux.sh        # Descarga e instala el APK de Termux vía ADB (se ejecuta en PC/Mac)
-├── tests/                   # Pruebas de no mutación de los dry-run (CI)
+├── audit-linux.sh           # Auditoría de seguridad de solo lectura: Ubuntu/Debian/WSL2
+├── Audit-Windows.ps1        # Auditoría de seguridad de solo lectura: Windows 10/11
+├── audit-android-adb.sh     # Auditoría de seguridad de solo lectura de un Android vía ADB (desde PC)
+├── tests/                   # Pruebas de no mutación de los dry-run y de las auditorías (CI)
 └── dotfiles/
     ├── .zshrc               # zsh único; detecta Termux, proot, AVF y Ubuntu/Debian
     └── init.vim             # Configuración de Neovim
+```
+
+## Auditoría de seguridad (solo lectura)
+
+Los tres scripts solo leen estado y escriben un informe Markdown con permisos
+restringidos. No instalan, cambian ni borran nada. Por defecto redactan IP, MAC,
+nombre del equipo, usuario, serie y correos para que el informe pueda
+compartirse; `--no-redact` / `-NoRedact` conserva esos datos.
+
+```bash
+# Ubuntu / Debian / WSL2: primero como usuario; con sudo añade sshd -T, UFW/nft y sudoers
+./audit-linux.sh
+sudo ./audit-linux.sh --output /tmp/auditoria-root.md
+
+# Android por ADB desde el PC (activa la depuración USB y desactívala al terminar)
+./audit-android-adb.sh
+```
+
+```powershell
+# Windows 10/11 (PowerShell 7 o 5.1); como administrador añade BitLocker, Secure Boot y SMBv1
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\Audit-Windows.ps1
+```
+
+Qué revisan: parches, cuentas y privilegios, SSH/RDP, puertos a la escucha
+(Ollama, Docker, Open WebUI…) y su exposición por IPv6, cortafuegos, cifrado y
+arranque verificado, credenciales en claro (`.git-credentials`, historiales,
+variables de entorno), configuración de Claude Code/Claude Desktop/Codex
+(`bypassPermissions`, permisos amplios, hooks, servidores MCP) y persistencia.
+En Android, además: parche de seguridad, bootloader, bloqueo de pantalla,
+servicios de accesibilidad, administradores de dispositivo, apps con permiso
+para instalar apps y apps instaladas fuera de tiendas (indicadores de stalkerware).
+
+Pruebas de no mutación:
+
+```bash
+bash tests/test-audit-linux-readonly.sh
+bash tests/test-audit-android-adb.sh
 ```
 
 ## Dos formas de tener Debian en el móvil
