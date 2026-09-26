@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Termux Android Dev Environment Setup
 
-set -e
+set -euo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -69,7 +69,8 @@ install_languages() {
         cmake
 
     # Python tools
-    pip install --upgrade pip
+    # No se ejecuta "pip install --upgrade pip": Termux lo bloquea porque rompe el paquete python-pip.
+    # Sin topes de versión mayor: los rangos no mitigan supply chain (eso requeriría --require-hashes).
     pip install black isort pytest httpx rich typer
 }
 
@@ -79,8 +80,10 @@ install_shell() {
     pkg install -y zsh
 
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
-        log "Instalando Oh-My-Zsh..."
-        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+        log "Instalando Oh-My-Zsh (git clone — sin curl|sh)..."
+        # Clonamos directamente en vez de ejecutar un script remoto sin verificar.
+        # curl|sh es vulnerable a MITM y compromiso del CDN.
+        git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git "$HOME/.oh-my-zsh"
     else
         warn "Oh-My-Zsh ya está instalado."
     fi
@@ -126,6 +129,27 @@ configure_git() {
     git config --global color.ui auto
 }
 
+# ── Debian vía proot-distro (opcional) ────────────────────────────────────────
+install_debian_proot() {
+    read -rp "¿Instalar un entorno Debian completo con proot-distro? Da glibc real, útil para herramientas que fallan en el entorno nativo de Termux (ej. Claude Code CLI) [y/N]: " reply
+    case "$reply" in
+        [yY]*)
+            log "Instalando proot-distro..."
+            pkg install -y proot-distro
+            log "Instalando Debian (puede tardar unos minutos)..."
+            proot-distro install debian || warn "Debian ya podría estar instalado. Revisa con: proot-distro list"
+            info "Entra con: proot-distro login debian"
+            info "Luego, dentro de Debian, ejecuta:"
+            echo "  cd $(pwd)"
+            echo "  bash setup-debian.sh                 # dry-run: revisa el plan"
+            echo "  bash setup-debian.sh --apply --replace-dotfiles --with-claude-code"
+            ;;
+        *)
+            info "Omitiendo instalación de Debian."
+            ;;
+    esac
+}
+
 # ── Clave SSH ──────────────────────────────────────────────────────────────────
 setup_ssh() {
     local KEY="$HOME/.ssh/id_ed25519"
@@ -133,7 +157,10 @@ setup_ssh() {
         log "Generando clave SSH Ed25519..."
         mkdir -p "$HOME/.ssh"
         chmod 700 "$HOME/.ssh"
-        ssh-keygen -t ed25519 -C "termux-android" -f "$KEY" -N ""
+        # Pedimos passphrase interactivamente en lugar de dejarla vacía (-N "").
+        # Una clave sin passphrase es robable si el dispositivo cae en manos ajenas.
+        warn "Se te pedirá una passphrase. Déjala vacía solo si sabes lo que haces."
+        ssh-keygen -t ed25519 -C "termux-android" -f "$KEY"
         info "Clave pública (agrégala a GitHub/GitLab):"
         echo ""
         cat "${KEY}.pub"
@@ -160,6 +187,7 @@ summary() {
     command -v go     &>/dev/null && echo "  Go:      $(go version)"
     command -v rustc  &>/dev/null && echo "  Rust:    $(rustc --version)"
     echo ""
+    command -v proot-distro &>/dev/null && info "Entorno Debian disponible: escribe 'debian' para entrar."
     warn "Reinicia Termux para aplicar todos los cambios."
 }
 
@@ -174,6 +202,7 @@ main() {
     install_nvim_config
     configure_git
     setup_ssh
+    install_debian_proot
     summary
 }
 

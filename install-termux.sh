@@ -27,12 +27,47 @@ latest_version() {
         | sed 's/.*"tag_name": *"\(.*\)".*/\1/'
 }
 
-# ── Construir URL de descarga ──────────────────────────────────────────────────
+# ── Construir URLs de descarga ─────────────────────────────────────────────────
 apk_url() {
     local version="$1" arch="$2"
     local encoded_version
     encoded_version=$(echo "$version" | sed 's/+/%2B/g')
     echo "https://github.com/termux/termux-app/releases/download/${version}/termux-app_${encoded_version}%2Bgithub-debug_${arch}.apk"
+}
+
+sums_url() {
+    local version="$1" encoded_version
+    encoded_version=$(echo "$version" | sed 's/+/%2B/g')
+    # Termux publica un único fichero de checksums por release (no uno por APK)
+    echo "https://github.com/termux/termux-app/releases/download/${version}/termux-app_${encoded_version}%2Bgithub-debug_sha256sums"
+}
+
+# ── SHA256 portable (Linux: sha256sum · macOS: shasum) ─────────────────────────
+sha256_of() {
+    if command -v sha256sum >/dev/null; then
+        sha256sum "$1" | awk '{print $1}'
+    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+
+# ── Verificar integridad del APK ───────────────────────────────────────────────
+verify_apk() {
+    local apk_file="$1" url="$2" apk_name="$3"
+    local sums expected actual
+
+    log "Descargando checksums SHA256..."
+    sums=$(curl -fsSL "$url") \
+        || err "No se pudo descargar sha256sums. Abortando por seguridad."
+
+    expected=$(printf '%s\n' "$sums" | awk -v n="$apk_name" '$2==n || $2=="*"n {print $1; exit}')
+    [[ -n "$expected" ]] || err "No hay checksum publicado para ${apk_name}. Abortando."
+
+    actual=$(sha256_of "$apk_file")
+    if [[ "$expected" != "$actual" ]]; then
+        err "¡FALLO DE INTEGRIDAD SHA256! El APK puede haber sido manipulado. No se instalará."
+    fi
+    log "SHA256 verificado: $actual"
 }
 
 # ── Verificar dependencias locales ─────────────────────────────────────────────
@@ -62,15 +97,24 @@ main() {
     [ -z "$version" ] && err "No se pudo obtener la versión de GitHub. Revisa tu conexión."
     info "Versión: $version"
 
-    local url
+    local url sums_download_url apk_name apk_file
     url=$(apk_url "$version" "$arch")
-    local apk_file="/tmp/termux-${version}-${arch}.apk"
+    sums_download_url=$(sums_url "$version")
+    apk_name="termux-app_${version}+github-debug_${arch}.apk"
+
+    # Directorio temporal aleatorio (portable GNU/BSD) — evita TOCTOU con nombre predecible.
+    # Variable global a propósito: el trap EXIT se ejecuta cuando main() ya ha retornado.
+    TMPDIR_APK=$(mktemp -d "${TMPDIR:-/tmp}/termux-apk.XXXXXX")
+    trap 'rm -rf "${TMPDIR_APK:-}"' EXIT
+    apk_file="${TMPDIR_APK}/${apk_name}"
 
     log "Descargando APK..."
     curl -fL --progress-bar -o "$apk_file" "$url" \
         || err "Descarga fallida. URL: $url"
 
     info "APK guardado en: $apk_file"
+
+    verify_apk "$apk_file" "$sums_download_url" "$apk_name"
 
     log "Instalando en el dispositivo via ADB..."
     adb install -r "$apk_file" \
@@ -87,8 +131,6 @@ main() {
     echo "  git clone https://github.com/espheral/- ~/termux-setup"
     echo "  cd ~/termux-setup && chmod +x setup.sh && ./setup.sh"
     echo ""
-
-    rm -f "$apk_file"
 }
 
 main "$@"
