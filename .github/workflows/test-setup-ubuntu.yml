@@ -1,9 +1,12 @@
-name: Test Ubuntu setup
+name: Test setup scripts
 
 on:
   pull_request:
     paths:
       - setup-ubuntu.sh
+      - setup-debian.sh
+      - setup-linux-terminal.sh
+      - sync-dotfiles.sh
       - dotfiles/**
       - tests/**
       - .github/workflows/test-setup-ubuntu.yml
@@ -23,8 +26,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends shellcheck
       - name: Check Bash syntax
-        run: bash -n setup-ubuntu.sh tests/test-setup-ubuntu-dry-run.sh
+        run: bash -n setup-ubuntu.sh setup-debian.sh setup-linux-terminal.sh sync-dotfiles.sh tests/*.sh
       - name: Run ShellCheck
-        run: shellcheck setup-ubuntu.sh tests/test-setup-ubuntu-dry-run.sh
-      - name: Verify non-mutating dry-run
+        run: shellcheck setup-ubuntu.sh setup-debian.sh setup-linux-terminal.sh sync-dotfiles.sh tests/*.sh
+      - name: Verify non-mutating Ubuntu dry-run
         run: bash tests/test-setup-ubuntu-dry-run.sh
+      - name: Verify non-mutating Debian/AVF dry-run
+        run: bash tests/test-setup-debian-dry-run.sh
