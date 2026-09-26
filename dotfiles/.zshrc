@@ -4,17 +4,26 @@ ZSH_THEME="robbyrussell"
 
 # robbyrussell no requiere fuentes Powerline — funciona en cualquier terminal Android
 
-plugins=(
-    git
-    zsh-autosuggestions
-    zsh-syntax-highlighting
-    python
-    node
-    colored-man-pages
-    command-not-found
-)
-
-source "$ZSH/oh-my-zsh.sh"
+# Tolerante a entornos sin Oh-My-Zsh (p. ej. Ubuntu con setup-ubuntu.sh, que no
+# ejecuta instaladores remotos): solo se cargan los plugins que existen.
+if [ -r "$ZSH/oh-my-zsh.sh" ]; then
+    plugins=(git python node colored-man-pages command-not-found)
+    for _p in zsh-autosuggestions zsh-syntax-highlighting; do
+        [ -d "${ZSH_CUSTOM:-$ZSH/custom}/plugins/$_p" ] && plugins+=("$_p")
+    done
+    unset _p
+    source "$ZSH/oh-my-zsh.sh"
+else
+    autoload -Uz compinit && compinit
+    autoload -Uz colors && colors
+    PROMPT='%F{cyan}%~%f %# '
+    # Paquetes apt zsh-autosuggestions / zsh-syntax-highlighting (Ubuntu)
+    for _f in /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh \
+              /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh; do
+        [ -r "$_f" ] && source "$_f"
+    done
+    unset _f
+fi
 
 # ── PATH ───────────────────────────────────────────────────────────────────────
 export PATH="$HOME/.local/bin:$PATH"
