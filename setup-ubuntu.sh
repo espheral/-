@@ -238,8 +238,13 @@ setup_ubuntu_pro() {
         log "(token-oculto-o-magic-attach: el secreto no se imprime ni se pasa por argv)"
         quote_cmd "${SUDO[@]}" pro enable esm-infra --assume-yes
         quote_cmd "${SUDO[@]}" pro enable esm-apps --assume-yes
-        ((IS_WSL || IS_CONTAINER)) || quote_cmd "${SUDO[@]}" pro enable livepatch --assume-yes '(opcional)'
-        quote_cmd "${SUDO[@]}" pro enable usg --assume-yes '(opcional)'
+        # La marca «opcional» va aparte: el comando mostrado debe ser idéntico al que se ejecuta.
+        if ! ((IS_WSL || IS_CONTAINER)); then
+            quote_cmd "${SUDO[@]}" pro enable livepatch --assume-yes
+            log "  ↳ livepatch es opcional: un fallo avisa y no aborta"
+        fi
+        quote_cmd "${SUDO[@]}" pro enable usg --assume-yes
+        log "  ↳ usg es opcional: un fallo avisa y no aborta"
         quote_cmd "${SUDO[@]}" apt-get install -y --no-install-recommends usg
         ((KEEP_APT_NEWS)) || quote_cmd "${SUDO[@]}" pro config set apt_news=false
         return
