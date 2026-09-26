@@ -7,6 +7,9 @@ on:
       - setup-debian.sh
       - setup-linux-terminal.sh
       - sync-dotfiles.sh
+      - audit-linux.sh
+      - audit-android-adb.sh
+      - Audit-Windows.ps1
       - dotfiles/**
       - tests/**
       - .github/workflows/test-setup-ubuntu.yml
@@ -20,16 +23,26 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Install ShellCheck
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends shellcheck
       - name: Check Bash syntax
-        run: bash -n setup-ubuntu.sh setup-debian.sh setup-linux-terminal.sh sync-dotfiles.sh tests/*.sh
+        run: bash -n setup-ubuntu.sh setup-debian.sh setup-linux-terminal.sh sync-dotfiles.sh audit-linux.sh audit-android-adb.sh tests/*.sh
       - name: Run ShellCheck
-        run: shellcheck setup-ubuntu.sh setup-debian.sh setup-linux-terminal.sh sync-dotfiles.sh tests/*.sh
+        run: shellcheck setup-ubuntu.sh setup-debian.sh setup-linux-terminal.sh sync-dotfiles.sh audit-linux.sh audit-android-adb.sh tests/*.sh
       - name: Verify non-mutating Ubuntu dry-run
         run: bash tests/test-setup-ubuntu-dry-run.sh
       - name: Verify non-mutating Debian/AVF dry-run
         run: bash tests/test-setup-debian-dry-run.sh
+      - name: Verify read-only Linux audit
+        run: bash tests/test-audit-linux-readonly.sh
+      - name: Verify read-only Android ADB audit
+        run: bash tests/test-audit-android-adb.sh
+      - name: Parse Windows audit script
+        shell: pwsh
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD/Audit-Windows.ps1", [ref]$null, [ref]$errors)
+          if ($errors) { $errors | ForEach-Object { Write-Error "$($_.Extent.StartLineNumber): $($_.Message)" }; exit 1 }
