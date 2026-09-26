@@ -41,7 +41,7 @@ El script instala:
 | Categoría | Herramientas |
 |-----------|-------------|
 | Base | build-essential, git, curl, wget, gnupg, jq, htop, tmux, tree, ripgrep, fd, fzf, bat |
-| Shell | zsh, Oh-My-Zsh, autosuggestions, syntax-highlighting |
+| Shell | zsh + autosuggestions y syntax-highlighting desde apt; `.zshrc` usa Oh-My-Zsh solo si ya existe |
 | Editores | Neovim, Vim, Nano |
 | Lenguajes | Python 3 (+ venv, pipx), Node.js/npm, Go y Rust/Cargo desde los repositorios de Ubuntu, clang/cmake |
 | Git | configuración global y clave SSH solo con opciones expresas |
@@ -57,8 +57,8 @@ Solo funciona en versiones **LTS** (20.04, 22.04, 24.04).
 |----------|:---------------------:|------------|
 | `esm-infra` | Sí | Parches de seguridad para `main` hasta 10 años (12 con Legacy) |
 | `esm-apps` | Sí | Parches de seguridad para `universe` (~23.000 paquetes extra) |
-| `livepatch` | Sí, salvo WSL/contenedor | Parches de kernel sin reiniciar. Requiere kernel de Canonical + snapd |
-| `usg` | Sí | Herramienta `usg` para auditar/aplicar CIS y DISA-STIG. **Solo instala la herramienta**, no endurece nada |
+| `livepatch` | Sí, salvo WSL/contenedor (opcional: si falla, avisa y continúa) | Parches de kernel sin reiniciar. Requiere kernel de Canonical + snapd |
+| `usg` | Sí (opcional; tras habilitarlo instala el paquete `usg`) | Herramienta `usg` para auditar/aplicar CIS y DISA-STIG. **Solo instala la herramienta**, no endurece nada |
 | `fips`, `fips-updates` | No | Kernel y libs certificadas FIPS 140. Sustituye el kernel; solo si lo exiges por cumplimiento |
 | `realtime-kernel` | No | Kernel PREEMPT_RT. Sustituye el kernel; solo para cargas de tiempo real |
 | `landscape` | No | Cliente de gestión de flota. Landscape SaaS está incluido en Pro, pero requiere configuración propia |

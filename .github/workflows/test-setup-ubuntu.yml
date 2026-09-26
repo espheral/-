@@ -24,12 +24,23 @@ jobs:
       - name: Install ShellCheck
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends shellcheck
+          sudo apt-get install -y --no-install-recommends shellcheck zsh
       - name: Check Bash syntax
         run: bash -n setup-ubuntu.sh setup-debian.sh setup-linux-terminal.sh sync-dotfiles.sh tests/*.sh
       - name: Run ShellCheck
         run: shellcheck setup-ubuntu.sh setup-debian.sh setup-linux-terminal.sh sync-dotfiles.sh tests/*.sh
       - name: Verify non-mutating Ubuntu dry-run
         run: bash tests/test-setup-ubuntu-dry-run.sh
+      - name: Verify Ubuntu Pro logic with stubs
+        run: bash tests/test-setup-ubuntu-pro.sh
       - name: Verify non-mutating Debian/AVF dry-run
         run: bash tests/test-setup-debian-dry-run.sh
+      - name: Check zshrc loads without Oh-My-Zsh
+        run: |
+          zsh -n dotfiles/.zshrc
+          tmp_home=$(mktemp -d)
+          cp dotfiles/.zshrc "$tmp_home/"
+          out=$(HOME="$tmp_home" zsh -i -c 'echo ZSHRC_OK' 2>&1)
+          printf '%s\n' "$out"
+          grep -qx ZSHRC_OK <<<"$out"
+          ! grep -qi 'oh-my-zsh\|no such file\|not found' <<<"$out"
