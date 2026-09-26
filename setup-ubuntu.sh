@@ -132,7 +132,7 @@ install_packages() {
     apt_install build-essential git curl wget ca-certificates gnupg lsb-release \
         openssh-client tar zip unzip xz-utils jq htop tmux tree ripgrep fd-find \
         fzf bat software-properties-common python3 python3-pip python3-venv pipx \
-        neovim vim nano zsh nodejs npm golang-go rustc cargo clang make cmake pkg-config
+        neovim vim nano zsh zsh-autosuggestions zsh-syntax-highlighting nodejs npm golang-go rustc cargo clang make cmake pkg-config
 }
 
 backup_path() {
@@ -185,7 +185,36 @@ setup_ssh() {
 }
 
 pro_attached() {
-    run_root pro status --format json >/dev/null
+    # 'pro status' devuelve 0 también sin attach: hay que leer el campo JSON.
+    local status_json
+    status_json=$(pro status --format json 2>/dev/null) || return 1
+    jq -e '.attached == true' >/dev/null <<<"$status_json"
+}
+
+pro_attach_with_env_token() {
+    # El token nunca va en argv: se escribe con el builtin printf en un fichero
+    # 0600 y se pasa con --attach-config.
+    local cfg rc=0
+    cfg=$(mktemp)
+    # shellcheck disable=SC2064  # expansión inmediata intencionada
+    trap "rm -f -- '$cfg'" EXIT
+    chmod 0600 "$cfg"
+    printf 'token: "%s"\nenable_services: []\n' "$UBUNTU_PRO_TOKEN" >"$cfg"
+    unset UBUNTU_PRO_TOKEN
+    run_root pro attach --no-auto-enable --attach-config "$cfg" || rc=$?
+    rm -f -- "$cfg"
+    trap - EXIT
+    return "$rc"
+}
+
+pro_enable_optional() {
+    # Servicios opcionales: un fallo se informa pero no aborta el resto.
+    local service=$1
+    if run_root pro enable "$service" --assume-yes; then
+        return 0
+    fi
+    warn "No se pudo habilitar '$service' (kernel/entorno no compatible o servicio no disponible); se continúa."
+    return 1
 }
 
 setup_ubuntu_pro() {
@@ -201,19 +230,24 @@ setup_ubuntu_pro() {
         else
             log "Se usaría magic attach en una terminal interactiva"
         fi
-        quote_cmd "${SUDO[@]}" pro attach --no-auto-enable '<token-oculto-o-magic-attach>'
+        if [[ -n ${UBUNTU_PRO_TOKEN:-} ]]; then
+            quote_cmd "${SUDO[@]}" pro attach --no-auto-enable --attach-config '<fichero-0600-temporal>'
+        else
+            quote_cmd "${SUDO[@]}" pro attach --no-auto-enable
+        fi
+        log "(token-oculto-o-magic-attach: el secreto no se imprime ni se pasa por argv)"
         quote_cmd "${SUDO[@]}" pro enable esm-infra --assume-yes
         quote_cmd "${SUDO[@]}" pro enable esm-apps --assume-yes
-        ((IS_WSL || IS_CONTAINER)) || quote_cmd "${SUDO[@]}" pro enable livepatch --assume-yes
-        quote_cmd "${SUDO[@]}" pro enable usg --assume-yes
+        ((IS_WSL || IS_CONTAINER)) || quote_cmd "${SUDO[@]}" pro enable livepatch --assume-yes '(opcional)'
+        quote_cmd "${SUDO[@]}" pro enable usg --assume-yes '(opcional)'
+        quote_cmd "${SUDO[@]}" apt-get install -y --no-install-recommends usg
         ((KEEP_APT_NEWS)) || quote_cmd "${SUDO[@]}" pro config set apt_news=false
         return
     fi
 
     if ! pro_attached; then
         if [[ -n ${UBUNTU_PRO_TOKEN:-} ]]; then
-            run_root pro attach --no-auto-enable "$UBUNTU_PRO_TOKEN"
-            unset UBUNTU_PRO_TOKEN
+            pro_attach_with_env_token
         elif [[ -t 0 ]]; then
             run_root pro attach --no-auto-enable
         else
@@ -225,9 +259,11 @@ setup_ubuntu_pro() {
     if ((IS_WSL || IS_CONTAINER)); then
         log "Livepatch omitido en WSL/contenedor"
     else
-        run_root pro enable livepatch --assume-yes
+        pro_enable_optional livepatch || true
     fi
-    run_root pro enable usg --assume-yes
+    if pro_enable_optional usg; then
+        apt_install usg || warn "No se pudo instalar el paquete usg; se continúa."
+    fi
     ((KEEP_APT_NEWS)) || run_root pro config set apt_news=false
 }
 
