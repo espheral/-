@@ -129,6 +129,27 @@ configure_git() {
     git config --global color.ui auto
 }
 
+# ── Debian vía proot-distro (opcional) ────────────────────────────────────────
+install_debian_proot() {
+    read -rp "¿Instalar un entorno Debian completo con proot-distro? Da glibc real, útil para herramientas que fallan en el entorno nativo de Termux (ej. Claude Code CLI) [y/N]: " reply
+    case "$reply" in
+        [yY]*)
+            log "Instalando proot-distro..."
+            pkg install -y proot-distro
+            log "Instalando Debian (puede tardar unos minutos)..."
+            proot-distro install debian || warn "Debian ya podría estar instalado. Revisa con: proot-distro list"
+            info "Entra con: proot-distro login debian"
+            info "Luego, dentro de Debian, ejecuta:"
+            echo "  cd $(pwd)"
+            echo "  bash setup-debian.sh                 # dry-run: revisa el plan"
+            echo "  bash setup-debian.sh --apply --replace-dotfiles --with-claude-code"
+            ;;
+        *)
+            info "Omitiendo instalación de Debian."
+            ;;
+    esac
+}
+
 # ── Clave SSH ──────────────────────────────────────────────────────────────────
 setup_ssh() {
     local KEY="$HOME/.ssh/id_ed25519"
@@ -166,6 +187,7 @@ summary() {
     command -v go     &>/dev/null && echo "  Go:      $(go version)"
     command -v rustc  &>/dev/null && echo "  Rust:    $(rustc --version)"
     echo ""
+    command -v proot-distro &>/dev/null && info "Entorno Debian disponible: escribe 'debian' para entrar."
     warn "Reinicia Termux para aplicar todos los cambios."
 }
 
@@ -180,6 +202,7 @@ main() {
     install_nvim_config
     configure_git
     setup_ssh
+    install_debian_proot
     summary
 }
 

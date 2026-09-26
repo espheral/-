@@ -164,13 +164,115 @@ El script instala y configura automáticamente:
 
 ```
 .
-├── setup-ubuntu.sh    # Instalación en Ubuntu (escritorio/servidor/WSL2) + Ubuntu Pro
-├── setup.sh           # Instalación en Termux (Android)
-├── install-termux.sh  # Descarga e instala el APK de Termux vía ADB (se ejecuta en PC/Mac)
+├── setup-ubuntu.sh          # Ubuntu (escritorio/servidor/WSL2) + Ubuntu Pro; dry-run por defecto
+├── setup.sh                 # Instalación en Termux (Android)
+├── setup-debian.sh          # Debian en Android: proot-distro o app Terminal (AVF); dry-run por defecto
+├── setup-linux-terminal.sh  # Atajo de setup-debian.sh --target avf
+├── sync-dotfiles.sh         # Sincroniza dotfiles entre Termux, proot y AVF vía Descargas
+├── install-termux.sh        # Descarga e instala el APK de Termux vía ADB (se ejecuta en PC/Mac)
+├── tests/                   # Pruebas de no mutación de los dry-run (CI)
 └── dotfiles/
-    ├── .zshrc         # Configuración de zsh compartida; detecta Termux vs Ubuntu
-    └── init.vim       # Configuración de Neovim
+    ├── .zshrc               # zsh único; detecta Termux, proot, AVF y Ubuntu/Debian
+    └── init.vim             # Configuración de Neovim
 ```
+
+## Dos formas de tener Debian en el móvil
+
+Hay dos caminos distintos para tener un Debian real en Android, y **no están
+relacionados entre sí** — usa la sección que corresponda a lo que tienes instalado:
+
+| | proot-distro (sobre Termux) | App "Terminal" nativa (AVF) |
+|---|---|---|
+| Qué es | Debian en un chroot dentro de Termux | VM Debian real de Google (crosvm + pKVM) |
+| Requiere Termux | Sí | No — es una app aparte de Android |
+| Cómo se activa | `pkg install proot-distro` en Termux | Ajustes → Opciones de desarrollador → *Linux development environment* |
+| Usuario | `root` | `droid` (con `sudo`) |
+| Almacenamiento compartido | `/sdcard`, y el `home` de Termux | Solo la carpeta *Descargas*, vía `/mnt/shared` |
+| Script de este repo | `setup-debian.sh` | `setup-linux-terminal.sh` |
+
+Si tu prompt se ve como `droid@debian:~$` y llegaste ahí abriendo la app
+**Terminal** de Android (no Termux), estás en el segundo caso.
+
+## Entorno Debian vía proot-distro (sobre Termux)
+
+Termux usa su propio entorno Android (no es Debian ni ninguna distro estándar),
+lo que a veces causa problemas con herramientas que esperan un Linux glibc
+normal — por ejemplo, **Claude Code CLI**. Para eso, `setup.sh` puede instalar
+un Debian real dentro de Termux usando [proot-distro](https://github.com/termux/proot-distro).
+
+### Instalación
+
+Al ejecutar `./setup.sh` se te preguntará si quieres instalarlo. También puedes
+hacerlo manualmente:
+
+```bash
+pkg install -y proot-distro
+proot-distro install debian
+```
+
+### Uso
+
+```bash
+proot-distro login debian    # o el alias: debian
+cd /data/data/com.termux/files/home/termux-setup   # tu clon de este repo, visible desde Debian
+bash setup-debian.sh                                # dry-run: solo muestra el plan
+bash setup-debian.sh --apply --replace-dotfiles --set-shell --with-claude-code
+```
+
+Sin opciones, `setup-debian.sh` instala solo paquetes de Debian (`apt`): Neovim,
+Python + pipx, Node.js, Go, Rust, zsh. Cada cambio persistente requiere su
+opción (ver `--help`): `--replace-dotfiles` (con copia previa; instala
+Oh-My-Zsh), `--set-shell`, `--configure-git`, `--generate-ssh-key` (con
+passphrase) o `--reuse-termux-ssh-key`, `--with-nodesource`,
+`--with-claude-code` y `--upgrade-system`. Los instaladores remotos se descargan
+a un fichero temporal antes de ejecutarse (nunca `curl | bash`). Al terminar:
+
+```bash
+claude
+```
+
+> **Nota:** `/sdcard` y el `home` de Termux (`/data/data/com.termux/files/home`)
+> son accesibles desde dentro de Debian, así que no necesitas re-clonar el
+> repositorio. Para reutilizar la clave SSH de Termux, pásalo explícitamente
+> con `--reuse-termux-ssh-key`.
+
+## Entorno Debian vía app "Terminal" nativa (AVF)
+
+Desde Android 16, los Pixel compatibles traen una app **Terminal** que arranca
+una VM Debian real usando el [Android Virtualization Framework](https://source.android.com/docs/core/virtualization)
+(crosvm + pKVM) — no tiene relación con Termux. Se activa en:
+
+```
+Ajustes → Sistema → Opciones de desarrollador → Linux development environment
+```
+
+Luego abre la app **Terminal** desde el cajón de apps. Aparecerás como
+`droid@debian` con `sudo` disponible.
+
+### Instalación
+
+La VM tiene su propia red y `git`, así que puedes clonar el repo directamente
+dentro del Terminal, sin pasar por `/mnt/shared`:
+
+```bash
+sudo apt update -y && sudo apt install -y git
+git clone https://github.com/espheral/- ~/termux-setup
+cd ~/termux-setup
+bash setup-linux-terminal.sh         # dry-run
+bash setup-linux-terminal.sh --apply --replace-dotfiles --set-shell \
+    --generate-ssh-key --with-claude-code
+```
+
+`setup-linux-terminal.sh` equivale a `setup-debian.sh --target avf` (mismas
+opciones). Debe ejecutarse como `droid`; con `--apply` rechaza root. Al terminar:
+
+```bash
+claude
+```
+
+> **Nota:** el único puente de archivos con Android es la carpeta *Descargas*,
+> montada dentro de la VM en `/mnt/shared` (alias `shared`). No hay acceso al
+> resto del almacenamiento del teléfono, ni a Termux si también lo usas.
 
 ## Uso post-instalación
 
@@ -187,7 +289,7 @@ activate        # activa .venv ya existente
 # Ir al almacenamiento del teléfono
 storage         # cd /sdcard
 
-# Backup de dotfiles (a /sdcard en Termux, a ~/dotfiles-backup-* en Ubuntu)
+# Backup de dotfiles (/sdcard en Termux/proot, /mnt/shared en AVF, ~ en el resto)
 backup_dotfiles
 ```
 
@@ -229,28 +331,74 @@ Cópiala y agrégala en:
 
 ## Solución de problemas
 
-### `pkg update` falla
+### Termux
+
+| Problema | Solución |
+|----------|----------|
+| `pkg update` falla | Cambia mirror: `termux-change-repo` |
+| Permisos de almacenamiento denegados | Ejecuta: `termux-setup-storage` |
+| `command not found` después de instalar | Reinicia Termux por completo (cierra y abre) |
+| Neovim/vim no tiene colores | Agrega `export TERM=xterm-256color` a `.zshrc` |
+| Node.js/npm muy lento | Es normal en móvil; Debian vía proot-distro puede ser más rápido |
+| SSH falla con "permission denied" | Verifica que `~/.ssh/id_ed25519` tenga permisos `600`: `chmod 600 ~/.ssh/id_ed25519*` |
+
+### Linux Terminal (AVF)
+
+| Problema | Solución |
+|----------|----------|
+| No aparece la app Terminal | Abre Ajustes → Opciones de desarrollador, activa *Linux development environment*, reinicia |
+| `apt` falla con "Hash Sum mismatch" | Ejecuta: `sudo apt update -y && sudo apt clean` |
+| No hay acceso a archivos de Android | Solo funciona `/mnt/shared` (Descargas). Copia archivos ahí con: `cp archivo /mnt/shared/` |
+| "Permission denied" en home | Ejecuta: `sudo chown -R droid:droid ~` |
+| Memoria insuficiente (12GB mínimo) | Cierra apps. Linux Terminal usa hasta 4GB, deja espacio libre. |
+| Claude Code no funciona en git | Crea clave con `bash setup-linux-terminal.sh --apply --generate-ssh-key` y agrégala a GitHub |
+
+### Ambos entornos
+
+| Problema | Solución |
+|----------|----------|
+| `git clone` via SSH falla | Verifica: (1) clave SSH agregada a GitHub, (2) `ssh-keyscan github.com` en `/etc/ssh/ssh_known_hosts`, (3) permisos SSH: `chmod 700 ~/.ssh && chmod 600 ~/.ssh/*` |
+| Python: "ModuleNotFoundError" | Usa venv: `python3 -m venv .venv && source .venv/bin/activate` |
+| Node: "out of memory" | Reduce tamaño del proyecto o usa `--max-old-space-size=256` en npm |
+| El teclado virtual tapa el código | Usa una app de teclado con teclas de prog: **Hacker's Keyboard** o **Unexpected Keyboard** |
+
+## Plantillas de proyecto rápido
+
+Crea proyectos con estructura y `.gitignore` prehechos:
+
 ```bash
-termux-change-repo   # cambia el mirror
+mkpython mi-app      # Crea estructura Python con venv
+mknode mi-app        # Crea estructura Node.js con package.json
+mkrust mi-app        # Crea proyecto Rust con cargo
 ```
 
-### Permisos de almacenamiento denegados
+Cada plantilla:
+- Inicializa git
+- Agrega `.gitignore` apropiado
+- Crea README.md con instrucciones básicas
+- (Python) crea `main.py` con ejemplo
+- (Node) ejecuta `npm init -y`
+- (Rust) usa `cargo new`
+
+## Sincronizar dotfiles entre Termux y Linux Terminal
+
+Si usas ambos entornos en el mismo Pixel:
+
 ```bash
-termux-setup-storage
+bash sync-dotfiles.sh status # Compara local y carpeta compartida
+bash sync-dotfiles.sh push   # Envía tus dotfiles actuales
+bash sync-dotfiles.sh pull   # Trae dotfiles (copia previa de los locales que difieran)
 ```
 
-### Neovim no muestra colores
-Agrega esto a tu `.zshrc`:
-```bash
-export TERM=xterm-256color
-```
-
-### El teclado virtual tapa el código
-Usa una app de teclado con teclas de programación como **Hacker's Keyboard** o **Unexpected Keyboard**.
+Archivos sincronizados: `.zshrc`, `.gitconfig`, `.config/nvim/init.vim`. Nunca
+claves SSH. Carpeta común: Descargas de Android (`/sdcard/Download/.dotfiles-sync`
+en Termux/proot = `/mnt/shared/.dotfiles-sync` en AVF). Es legible por otras apps
+con permiso de almacenamiento.
 
 ## Tips para programar en móvil
 
 - **Pantalla dividida:** Usa el modo multipantalla de Android para tener el navegador y Termux a la vez.
 - **Teclado externo:** Un teclado Bluetooth mejora muchísimo la experiencia.
-- **Sesiones múltiples:** Desliza desde el borde izquierdo en Termux para abrir nuevas sesiones.
+- **Sesiones múltiples (Termux):** Desliza desde el borde izquierdo para abrir nuevas sesiones.
 - **Servidor local:** Usa `python3 -m http.server 8080` para previsualizar proyectos web desde el móvil.
+- **Archivos entre entornos:** Usa `/mnt/shared` (Linux Terminal) o `/sdcard` (Termux) para pasar datos.
